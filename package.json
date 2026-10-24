@@ -1,0 +1,49 @@
+{
+  "name": "misfit-founders-club",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "check:backend": "tsx --env-file=.env.local scripts/backend-check.ts",
+    "check:admin": "tsx --env-file=.env.local scripts/admin-check.ts",
+    "check:http": "tsx --env-file=.env.local scripts/http-check.ts",
+    "check:storage": "NODE_OPTIONS=--conditions=react-server tsx --env-file=.env.local scripts/storage-check.ts",
+    "check:security": "NODE_OPTIONS=--conditions=react-server tsx --env-file=.env.local scripts/security-check.ts",
+    "db:generate": "prisma generate",
+    "db:migrate": "tsx --env-file=.env.local scripts/prisma-command.ts migrate deploy",
+    "db:push": "tsx --env-file=.env.local scripts/prisma-command.ts db push",
+    "db:studio": "tsx --env-file=.env.local scripts/prisma-command.ts studio",
+    "db:seed": "tsx --env-file=.env.local prisma/seed.ts"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.10.0",
+    "@prisma/client": "^6.18.0",
+    "@supabase/supabase-js": "^2.76.1",
+    "next": "^16.0.0",
+    "next-auth": "^5.0.0-beta.30",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "eslint": "^9.39.0",
+    "eslint-config-next": "^16.0.0",
+    "prisma": "^6.18.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "overrides": {
+    "deepmerge-ts": "^8.0.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
