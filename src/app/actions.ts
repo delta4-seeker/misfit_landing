@@ -10,7 +10,7 @@ import { databaseIsConfigured } from "@/lib/database-url";
 import { incompleteProfileMessage, profileCompletion } from "@/lib/profile";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { uploadImage } from "@/lib/storage";
+import { deleteStoredImage, uploadImage } from "@/lib/storage";
 import { founderSlug, slugify } from "@/lib/utils";
 import { instagramHandleSchema, secureExternalUrlSchema } from "@/lib/validation";
 
@@ -22,7 +22,7 @@ export async function googleSignIn() {
   if (!databaseIsConfigured()) {
     redirect("/join?error=database");
   }
-  await signIn("google", { redirectTo: "/profile" });
+  await signIn("google", { redirectTo: "/" });
 }
 
 export async function logOut() {
@@ -141,6 +141,9 @@ export async function saveProfile(formData: FormData) {
     where: { id: member.id },
     data: { ...update, profileCompleted: completion.complete },
   });
+  if (uploaded && currentUser.profilePicture && currentUser.profilePicture !== uploaded) {
+    await deleteStoredImage(currentUser.profilePicture);
+  }
   revalidatePath("/", "layout");
   if (!completion.complete) redirect("/profile?saved=1");
   redirect(`/founders/${founderSlug(user.fullName || user.name || "founder", user.id)}`);
@@ -220,7 +223,7 @@ async function ownedProduct(slug: string, userId: string) {
 export async function updateProduct(slug: string, formData: FormData) {
   const member = await requireActiveMember(`/products/${slug}/manage`);
   if (!await consumeRateLimit("product-update", member.id, 30, HOUR)) redirect(`/products/${slug}/manage?error=Too+many+updates.+Please+try+again+later.`);
-  await ownedProduct(slug, member.id);
+  const existingProduct = await ownedProduct(slug, member.id);
   const values = Object.fromEntries(formData);
   if (!values.foundedMonth) delete values.foundedMonth;
   if (!values.foundedYear) delete values.foundedYear;
@@ -244,6 +247,9 @@ export async function updateProduct(slug: string, formData: FormData) {
       builtInNepal: formData.get("builtInNepal") === "on",
     },
   });
+  if (logoUrl && existingProduct.logoUrl && existingProduct.logoUrl !== logoUrl) {
+    await deleteStoredImage(existingProduct.logoUrl);
+  }
   revalidatePath(`/products/${slug}`);
   revalidatePath("/products");
   redirect(`/products/${slug}`);
@@ -251,8 +257,9 @@ export async function updateProduct(slug: string, formData: FormData) {
 
 export async function deleteProduct(slug: string) {
   const member = await requireActiveMember(`/products/${slug}/manage`);
-  await ownedProduct(slug, member.id);
+  const product = await ownedProduct(slug, member.id);
   await prisma.product.delete({ where: { slug } });
+  await deleteStoredImage(product.logoUrl);
   revalidatePath("/products");
   redirect("/products");
 }
@@ -360,24 +367,25 @@ export async function adminCreateEvent(formData: FormData) {
     description: formData.get("description"),
     lumaUrl: formData.get("lumaUrl"),
   });
-  const file = formData.get("coverImage");
-  let coverImageUrl: string | undefined;
-  if (file instanceof File && file.size) coverImageUrl = await uploadImage(file, "events", 5);
   const startsAt = new Date(String(formData.get("startsAt")));
   if (Number.isNaN(startsAt.getTime())) throw new Error("Choose a valid event date and time.");
   const capacityValue = String(formData.get("capacity") || "").trim();
   const priceValue = String(formData.get("priceNpr") || "").trim();
   const capacity = capacityValue ? z.coerce.number().int().nonnegative().max(100_000).parse(capacityValue) : null;
   const priceNpr = priceValue ? z.coerce.number().nonnegative().max(100_000_000).parse(priceValue) : null;
-  const event = await prisma.event.create({
-    data: {
-      ...details,
-      slug: `${slugify(details.title)}-${Date.now().toString(36)}`,
-      startsAt,
-      coverImageUrl,
-      capacity,
-      priceNpr,
-    },
+  const file = formData.get("coverImage");
+  let coverImageUrl: string | undefined;
+  if (file instanceof File && file.size) coverImageUrl = await uploadImage(file, "events", 5);
+  const event = await prisma.event.create({ data: {
+    ...details,
+    slug: `${slugify(details.title)}-${Date.now().toString(36)}`,
+    startsAt,
+    coverImageUrl,
+    capacity,
+    priceNpr,
+  } }).catch(async (error) => {
+    await deleteStoredImage(coverImageUrl);
+    throw error;
   });
   await audit(actor.id, "CREATE_EVENT", "Event", event.id, { title: details.title });
   revalidatePath("/events");
@@ -387,9 +395,13 @@ export async function adminAddGalleryPhoto(formData: FormData) {
   const actor = await requireAdmin();
   const file = formData.get("image");
   if (!(file instanceof File) || !file.size) throw new Error("Choose an image.");
-  const imageUrl = await uploadImage(file, "gallery", 8);
   const caption = z.string().trim().max(180).parse(formData.get("caption") || "");
-  const photo = await prisma.galleryPhoto.create({ data: { imageUrl, caption: caption || null, uploaderId: actor.id } });
+  const imageUrl = await uploadImage(file, "gallery", 8);
+  const photo = await prisma.galleryPhoto.create({ data: { imageUrl, caption: caption || null, uploaderId: actor.id } })
+    .catch(async (error) => {
+      await deleteStoredImage(imageUrl);
+      throw error;
+    });
   await audit(actor.id, "ADD_GALLERY_PHOTO", "GalleryPhoto", photo.id);
   revalidatePath("/gallery");
 }
@@ -397,6 +409,10 @@ export async function adminAddGalleryPhoto(formData: FormData) {
 export async function adminDelete(kind: "product" | "event" | "photo" | "subscriber" | "category" | "comment" | "user" | "invitation", id: string) {
   const safeKind = z.enum(["product", "event", "photo", "subscriber", "category", "comment", "user", "invitation"]).parse(kind);
   const actor = await requireAdmin(safeKind === "user");
+  const mediaUrls: Array<string | null | undefined> = [];
+  if (safeKind === "product") mediaUrls.push((await prisma.product.findUnique({ where: { id }, select: { logoUrl: true } }))?.logoUrl);
+  if (safeKind === "event") mediaUrls.push((await prisma.event.findUnique({ where: { id }, select: { coverImageUrl: true } }))?.coverImageUrl);
+  if (safeKind === "photo") mediaUrls.push((await prisma.galleryPhoto.findUnique({ where: { id }, select: { imageUrl: true } }))?.imageUrl);
   if (safeKind === "product") await prisma.product.delete({ where: { id } });
   if (safeKind === "event") await prisma.event.delete({ where: { id } });
   if (safeKind === "photo") await prisma.galleryPhoto.delete({ where: { id } });
@@ -405,13 +421,17 @@ export async function adminDelete(kind: "product" | "event" | "photo" | "subscri
   if (safeKind === "comment") await prisma.productComment.delete({ where: { id } });
   if (safeKind === "invitation") await prisma.coFounderInvite.delete({ where: { id } });
   if (safeKind === "user") {
-    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true, isSuperAdmin: true } });
+    const target = await prisma.user.findUnique({ where: { id }, select: {
+      id: true, email: true, isSuperAdmin: true, profilePicture: true, products: { select: { logoUrl: true } },
+    } });
     if (!target || target.id === actor.id || target.isSuperAdmin) throw new Error("This account cannot be deleted.");
+    mediaUrls.push(target.profilePicture, ...target.products.map((product) => product.logoUrl));
     await prisma.$transaction([
       prisma.coFounderInvite.updateMany({ where: { acceptedUserId: id }, data: { acceptedUserId: null, status: "REVOKED" } }),
       prisma.user.delete({ where: { id } }),
     ]);
   }
+  await Promise.all(mediaUrls.map((url) => deleteStoredImage(url)));
   await audit(actor.id, `DELETE_${safeKind.toUpperCase()}`, safeKind, id);
   revalidatePath("/", "layout");
 }

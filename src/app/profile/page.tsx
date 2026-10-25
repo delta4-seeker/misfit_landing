@@ -7,7 +7,7 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { profileCompletion } from "@/lib/profile";
 import { prisma } from "@/lib/prisma";
 
-export const metadata: Metadata = { title: "Complete your profile" };
+export const metadata: Metadata = { title: "Your profile" };
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
@@ -29,10 +29,12 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   const completion = profileCompletion(user);
   return (
     <section className="profile-form-layout section-shell">
-      <h1>Complete your profile.</h1>
+      <h1>{completion.complete ? "Edit your profile." : "Complete your profile."}</h1>
       {error && <p className="form-error" role="alert">{error}</p>}
       {saved && <p className="success-note" role="status">Your profile changes have been saved.</p>}
-      <p className="profile-form-note">Everything is optional to save. Complete every detail and add a profile picture before listing a product.</p>
+      <p className="profile-form-note">{completion.complete
+        ? "Update any detail you want to change."
+        : "Everything is optional to save. Complete every detail and add a profile picture before listing a product."}</p>
       <form className="panel-form" action={saveProfile}>
         <div className="profile-photo-field">
           <label className="profile-photo-picker">

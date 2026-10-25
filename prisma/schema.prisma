@@ -200,6 +200,19 @@ model GalleryPhoto {
   @@index([createdAt])
 }
 
+model MediaAsset {
+  id           String   @id @default(cuid())
+  data         Bytes    @db.ByteA
+  contentType  String
+  size         Int
+  checksum     String
+  folder       String
+  originalName String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
+
 model NewsletterSubscriber {
   id             String   @id @default(cuid())
   email          String   @unique

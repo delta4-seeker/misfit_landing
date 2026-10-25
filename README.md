@@ -1,6 +1,6 @@
 # Misfit Founders Club
 
-The portal now runs on Next.js App Router, Auth.js, Prisma, Supabase Postgres, and Supabase Storage. It includes the public club site, product directory, founder profiles, direct-to-Luma events, gallery, newsletter capture, Google login, profile completion, product submission, and a role-gated club dashboard.
+The portal runs on Next.js App Router, Auth.js, Prisma, and Supabase Postgres. It includes the public club site, product directory, founder profiles, direct-to-Luma events, gallery, newsletter capture, Google login, profile completion, product submission, and a role-gated club dashboard.
 
 ## Local setup
 
@@ -22,15 +22,13 @@ All secrets remain in `.env.local` locally and in the deployment provider's encr
 
 - `DATABASE_URL`: Supabase transaction-pooler URI on port 6543 for the deployed serverless app. Add `pgbouncer=true&connection_limit=1`.
 - `DIRECT_URL`: Supabase session-pooler URI on port 5432 for Prisma migrations, seeds, and imports.
-- `SUPABASE_PROJECT_REF`, `SUPABASE_POOLER_HOST`, and `SUPABASE_DB_PASSWORD`: IPv4 session-pooler fallback for local development when full database URLs have not been added yet.
+- `SUPABASE_PROJECT_REF`, `SUPABASE_POOLER_HOST`, and `SUPABASE_DB_PASSWORD`: fallback settings that build a port 6543 transaction-pooler URL for app traffic and a port 5432 session-pooler URL for migrations when full URLs have not been added yet.
 - `AUTH_SECRET`: a random session secret; generate one with `openssl rand -base64 32`.
 - `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET`: Google OAuth web client credentials.
 - `NEXT_PUBLIC_SITE_URL`: `http://localhost:3000` locally and `https://misfitfoundersclub.com` in production.
-- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`: Supabase project API settings. The service-role key is server-only.
-- `SUPABASE_STORAGE_BUCKET`: public image bucket, normally `misfit-media`.
 - `SEED_ADMIN_EMAIL`: defaults to `9165prashant@gmail.com`.
 
-Create a public Supabase Storage bucket named `misfit-media`. The app validates uploaded image type and size before writing to that bucket.
+Uploaded JPG, PNG, and WebP files are signature-checked and stored in the Supabase Postgres `MediaAsset` table. Public pages serve immutable media URLs through `/media/<asset-id>`, so uploads survive app restarts and stateless production deployments without filesystem storage.
 
 ## Google OAuth callbacks
 
@@ -67,7 +65,7 @@ npm run check:http
 npm run check:security
 ```
 
-Run the HTTP and security checks against a production build when preparing a release. Image uploads are intentionally disabled in production until `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured; the local filesystem fallback is development-only.
+Run the HTTP and security checks against a production build when preparing a release. The storage check writes, verifies, and removes a real database-backed image record.
 
 Core routes:
 

@@ -1,17 +1,10 @@
 import "server-only";
 
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { createHash } from "node:crypto";
 
-import { createClient } from "@supabase/supabase-js";
+import { prisma } from "@/lib/prisma";
 
 const acceptedImages = new Set(["image/jpeg", "image/png", "image/webp"]);
-const imageExtensions: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
-
 function safeFolder(folder: string) {
   return folder
     .split("/")
@@ -27,38 +20,32 @@ function hasValidSignature(bytes: Buffer, mimeType: string) {
   return false;
 }
 
-async function saveLocally(bytes: Buffer, mimeType: string, folder: string) {
-  const relativeFolder = safeFolder(folder) || "misc";
-  const filename = `${crypto.randomUUID()}.${imageExtensions[mimeType]}`;
-  const uploadDirectory = path.join(process.cwd(), "public", "uploads", relativeFolder);
-  await mkdir(uploadDirectory, { recursive: true });
-  await writeFile(path.join(uploadDirectory, filename), bytes);
-  return `/uploads/${relativeFolder}/${filename}`;
-}
-
 export async function uploadImage(file: File, folder: string, maxMb: number) {
   if (!acceptedImages.has(file.type)) throw new Error("Use a JPG, PNG, or WebP image.");
+  if (!file.size) throw new Error("Choose an image.");
   if (file.size > maxMb * 1024 * 1024) throw new Error(`Image must be ${maxMb} MB or smaller.`);
   const bytes = Buffer.from(await file.arrayBuffer());
   if (!hasValidSignature(bytes, file.type)) throw new Error("The selected file is not a valid image.");
 
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const bucket = process.env.SUPABASE_STORAGE_BUCKET || "misfit-media";
-  if (!url || !serviceKey) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("Image storage is not configured. Add the Supabase URL and service-role key.");
-    }
-    return saveLocally(bytes, file.type, folder);
-  }
-
-  const client = createClient(url, serviceKey, { auth: { persistSession: false } });
-  const extension = imageExtensions[file.type];
-  const path = `${folder}/${crypto.randomUUID()}.${extension}`;
-  const { error } = await client.storage.from(bucket).upload(path, bytes, {
-    contentType: file.type,
-    upsert: false,
+  const asset = await prisma.mediaAsset.create({
+    data: {
+      data: bytes,
+      contentType: file.type,
+      size: bytes.byteLength,
+      checksum: createHash("sha256").update(bytes).digest("hex"),
+      folder: safeFolder(folder) || "misc",
+      originalName: file.name.slice(0, 255) || null,
+    },
   });
-  if (error) throw new Error(error.message);
-  return client.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  return `/media/${asset.id}`;
+}
+
+export function mediaAssetId(imageUrl: string | null | undefined) {
+  const match = imageUrl?.match(/^\/media\/([a-zA-Z0-9_-]{8,64})$/);
+  return match?.[1];
+}
+
+export async function deleteStoredImage(imageUrl: string | null | undefined) {
+  const id = mediaAssetId(imageUrl);
+  if (id) await prisma.mediaAsset.deleteMany({ where: { id } });
 }

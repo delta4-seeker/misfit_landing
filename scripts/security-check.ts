@@ -49,12 +49,22 @@ async function main() {
   const ignoreFile = await readFile(".gitignore", "utf8");
   checks.push(check("secret files ignored", [".env", ".env.local"].every((entry) => ignoreFile.split(/\r?\n/).includes(entry)), ".env and .env.local"));
 
-  const storageReady = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const [mediaTable] = await prisma.$queryRaw<Array<{ table_name: string | null }>>`
+    SELECT to_regclass('public."MediaAsset"')::text AS table_name
+  `;
+  const localUploadReferences = await prisma.$queryRaw<Array<{ count: bigint }>>`
+    SELECT (
+      (SELECT COUNT(*) FROM "User" WHERE "profilePicture" LIKE '/uploads/%') +
+      (SELECT COUNT(*) FROM "Product" WHERE "logoUrl" LIKE '/uploads/%') +
+      (SELECT COUNT(*) FROM "Event" WHERE "coverImageUrl" LIKE '/uploads/%') +
+      (SELECT COUNT(*) FROM "GalleryPhoto" WHERE "imageUrl" LIKE '/uploads/%')
+    ) AS count
+  `;
+  const storageReady = Boolean(mediaTable?.table_name) && Number(localUploadReferences[0]?.count || 0) === 0;
   checks.push(check(
-    "production object storage",
+    "durable production media storage",
     storageReady,
-    storageReady ? "Supabase Storage credentials present" : "missing NEXT_PUBLIC_SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY; local fallback is development-only",
-    !storageReady,
+    storageReady ? "database media table present; no local upload references" : `${Number(localUploadReferences[0]?.count || 0)} local upload reference(s) remain`,
   ));
 
   const action = `security-check-${crypto.randomUUID()}`;

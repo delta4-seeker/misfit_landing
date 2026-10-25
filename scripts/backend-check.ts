@@ -20,7 +20,7 @@ async function main() {
 
   const [
     users, accounts, sessions, categories, products, votes, comments, events, photos,
-    subscribers, auditLogs, migrations, failedMigrations, userRows, seededAdmin,
+    subscribers, auditLogs, mediaAssets, migrations, failedMigrations, userRows, seededAdmin,
   ] = await Promise.all([
     prisma.user.count(),
     prisma.account.count(),
@@ -33,6 +33,7 @@ async function main() {
     prisma.galleryPhoto.count(),
     prisma.newsletterSubscriber.count(),
     prisma.auditLog.count(),
+    prisma.mediaAsset.count(),
     prisma.$queryRaw<Array<{ migration_name: string }>>`
       SELECT migration_name FROM "_prisma_migrations"
       WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL
@@ -115,7 +116,7 @@ async function main() {
     status: failures ? "failed" : "passed",
     migrations: migrations.map((row) => row.migration_name),
     failedMigrations: failedMigrations.length,
-    counts: { users, accounts, sessions, categories, products, votes, comments, events, photos, subscribers, auditLogs },
+    counts: { users, accounts, sessions, categories, products, votes, comments, events, photos, subscribers, auditLogs, mediaAssets },
     orphanChecks,
     profileFlagMismatches,
     seededAdminReady: Boolean(seededAdmin?.isAdmin && seededAdmin?.isSuperAdmin),
