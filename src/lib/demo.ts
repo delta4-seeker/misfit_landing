@@ -1,4 +1,4 @@
-import type { EventSummary, FounderSummary, GalleryItem, ProductSummary } from "@/lib/types";
+import type { EventSummary, FounderSummary, GalleryItem, ProductSummary, TestimonialSummary } from "@/lib/types";
 
 export const demoCategories = [
   { id: "saas", name: "SaaS", slug: "saas" },
@@ -158,3 +158,36 @@ export const demoGallery: GalleryItem[] = [
   thumbnailUrl: null,
   caption,
 }));
+
+export const demoTestimonials: (TestimonialSummary & { sortOrder: number; active: boolean })[] = [
+  {
+    id: "preview-testimonial-indra-paudel",
+    quote: "The best part is being able to bring a messy founder problem to the room and leave with three practical next steps. The conversations feel honest, generous, and grounded in the work.",
+    name: "Aarav Shrestha",
+    role: "Founder",
+    company: "Northstar Labs",
+    photoUrl: "/demo/testimonial-aarav.jpg",
+    sortOrder: 1,
+    active: true,
+  },
+  {
+    id: "preview-testimonial-hyperce-clicks-cloud",
+    quote: "It is rare to find a founder community where people share what did not work as openly as what did. That kind of trust makes every introduction and piece of feedback more useful.",
+    name: "Maya Karki",
+    role: "Co-founder & CEO",
+    company: "Morrow Studio",
+    photoUrl: "/demo/testimonial-maya.jpg",
+    sortOrder: 2,
+    active: true,
+  },
+  {
+    id: "preview-testimonial-nisha-thapa",
+    quote: "Building from Nepal can feel like solving everything alone. This room reminds me that ambitious people are close by, willing to challenge an idea and help turn it into progress.",
+    name: "Nisha Thapa",
+    role: "Product Lead",
+    company: "Fieldnote",
+    photoUrl: "/demo/testimonial-nisha.jpg",
+    sortOrder: 3,
+    active: true,
+  },
+];

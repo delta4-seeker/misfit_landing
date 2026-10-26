@@ -16,7 +16,6 @@ export function ProductCard({ product }: { product: ProductSummary }) {
         </div>
         <div className="product-card-meta">
           <span className="tag">{product.category.name}</span>
-          {product.builtInNepal && <span className="tag tag-ghost">Made in Nepal</span>}
         </div>
         <h3 title={product.name}>{product.name}</h3>
         <p title={product.tagline}>{truncate(product.tagline, 50)}</p>

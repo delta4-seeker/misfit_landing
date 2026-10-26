@@ -1,36 +1,33 @@
 import "server-only";
 
+import type { Prisma } from "@prisma/client";
 import { unstable_noStore as noStore } from "next/cache";
 
-import { demoCategories, demoEvents, demoFounders, demoGallery, demoProducts } from "@/lib/demo";
-import { databaseIsConfigured } from "@/lib/database-url";
+import { pageBounds } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
-import type { EventSummary, FounderSummary, GalleryItem, ProductEngagement, ProductSummary } from "@/lib/types";
+import type { EventSummary, FounderSummary, GalleryItem, ProductEngagement, ProductSummary, TestimonialSummary } from "@/lib/types";
 import { displayName, founderSlug, profileImage } from "@/lib/utils";
 
-const databaseConfigured = databaseIsConfigured();
-
-async function withFallback<T>(query: () => Promise<T>, fallback: T): Promise<T> {
+async function fromDatabase<T>(query: () => Promise<T>): Promise<T> {
   noStore();
-  if (!databaseConfigured) return fallback;
-  try {
-    return await query();
-  } catch (error) {
-    if (process.env.NODE_ENV === "production") throw error;
-    console.warn("Database unavailable; rendering demo content.", error);
-    return fallback;
-  }
+  return query();
 }
 
 type ProductWithRelations = Awaited<ReturnType<typeof loadProductsFromDatabase>>[number];
 
-async function loadProductsFromDatabase(category?: string, featuredOnly = false) {
+function liveProductWhere(category?: string): Prisma.ProductWhereInput {
+  return {
+    status: "LIVE",
+    owner: { status: "ACTIVE" },
+    ...(category ? { category: { slug: category } } : {}),
+  };
+}
+
+async function loadProductsFromDatabase(category?: string, featuredOnly = false, pagination?: { skip: number; take: number }) {
   return prisma.product.findMany({
     where: {
-      status: "LIVE",
-      owner: { status: "ACTIVE" },
+      ...liveProductWhere(category),
       ...(featuredOnly ? { featured: true, exclusive: true } : {}),
-      ...(category ? { category: { slug: category } } : {}),
     },
     include: {
       category: true,
@@ -41,7 +38,7 @@ async function loadProductsFromDatabase(category?: string, featuredOnly = false)
     orderBy: featuredOnly
       ? [{ featuredOrder: "asc" }, { createdAt: "desc" }]
       : [{ createdAt: "desc" }],
-    ...(featuredOnly ? { take: 4 } : {}),
+    ...(featuredOnly ? { take: 4 } : pagination || {}),
   });
 }
 
@@ -77,29 +74,28 @@ function mapProduct(product: ProductWithRelations): ProductSummary {
 }
 
 export async function getCategories() {
-  return withFallback(
-    () => prisma.category.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
-    demoCategories,
-  );
+  return fromDatabase(() => prisma.category.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }));
 }
 
 export async function getProducts(category?: string) {
-  const fallback = category
-    ? demoProducts.filter((product) => product.category.slug === category)
-    : demoProducts;
-  return withFallback(async () => (await loadProductsFromDatabase(category)).map(mapProduct), fallback);
+  return fromDatabase(async () => (await loadProductsFromDatabase(category)).map(mapProduct));
+}
+
+export async function getProductsPage(category: string | undefined, requestedPage: number, pageSize = 6) {
+  return fromDatabase(async () => {
+    const totalCount = await prisma.product.count({ where: liveProductWhere(category) });
+    const bounds = pageBounds(totalCount, requestedPage, pageSize);
+    const products = await loadProductsFromDatabase(category, false, { skip: bounds.skip, take: pageSize });
+    return { products: products.map(mapProduct), totalCount, page: bounds.page, totalPages: bounds.totalPages };
+  });
 }
 
 export async function getFeaturedProducts() {
-  return withFallback(
-    async () => (await loadProductsFromDatabase(undefined, true)).map(mapProduct),
-    demoProducts.filter((product) => product.featured).slice(0, 4),
-  );
+  return fromDatabase(async () => (await loadProductsFromDatabase(undefined, true)).map(mapProduct));
 }
 
 export async function getProduct(slug: string) {
-  const fallback = demoProducts.find((product) => product.slug === slug) ?? null;
-  return withFallback(async () => {
+  return fromDatabase(async () => {
     const product = await prisma.product.findFirst({
       where: { slug, status: "LIVE", owner: { status: "ACTIVE" } },
       include: {
@@ -110,11 +106,11 @@ export async function getProduct(slug: string) {
       },
     });
     return product ? mapProduct(product) : null;
-  }, fallback);
+  });
 }
 
 export async function getProductEngagement(productId: string, viewerId?: string): Promise<ProductEngagement> {
-  return withFallback(async () => {
+  return fromDatabase(async () => {
     const [upvoteCount, viewerVote, comments] = await Promise.all([
       prisma.productVote.count({ where: { productId } }),
       viewerId
@@ -141,7 +137,7 @@ export async function getProductEngagement(productId: string, viewerId?: string)
         },
       })),
     };
-  }, { upvoteCount: 0, viewerHasUpvoted: false, comments: [] });
+  });
 }
 
 function mapEvent(event: {
@@ -169,25 +165,47 @@ function mapEvent(event: {
 }
 
 export async function getEvents() {
-  return withFallback(
-    async () => (await prisma.event.findMany({ orderBy: { startsAt: "asc" } })).map(mapEvent),
-    demoEvents,
-  );
+  return fromDatabase(async () => (await prisma.event.findMany({ orderBy: { startsAt: "asc" } })).map(mapEvent));
+}
+
+export async function getEventsPage(requestedPage: number, pageSize = 4) {
+  return fromDatabase(async () => {
+    const now = new Date();
+    const [upcomingCount, pastCount] = await Promise.all([
+      prisma.event.count({ where: { startsAt: { gte: now } } }),
+      prisma.event.count({ where: { startsAt: { lt: now } } }),
+    ]);
+    const bounds = pageBounds(upcomingCount + pastCount, requestedPage, pageSize);
+    const upcomingTake = Math.min(pageSize, Math.max(0, upcomingCount - bounds.skip));
+    const upcoming = upcomingTake ? await prisma.event.findMany({
+      where: { startsAt: { gte: now } },
+      orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+      skip: bounds.skip,
+      take: upcomingTake,
+    }) : [];
+    const pastTake = pageSize - upcoming.length;
+    const past = pastTake ? await prisma.event.findMany({
+      where: { startsAt: { lt: now } },
+      orderBy: [{ startsAt: "desc" }, { id: "desc" }],
+      skip: Math.max(0, bounds.skip - upcomingCount),
+      take: pastTake,
+    }) : [];
+    return { upcoming: upcoming.map(mapEvent), past: past.map(mapEvent), upcomingCount, page: bounds.page, totalPages: bounds.totalPages };
+  });
 }
 
 export async function getNextEvent() {
-  const fallback = demoEvents.find((event) => event.startsAt > new Date()) ?? null;
-  return withFallback(async () => {
+  return fromDatabase(async () => {
     const event = await prisma.event.findFirst({
       where: { startsAt: { gte: new Date() } },
       orderBy: { startsAt: "asc" },
     });
     return event ? mapEvent(event) : null;
-  }, fallback);
+  });
 }
 
 export async function getGallery(limit?: number) {
-  return withFallback(async () => {
+  return fromDatabase(async () => {
     const photos = await prisma.galleryPhoto.findMany({
       orderBy: { createdAt: "desc" },
       ...(limit ? { take: limit } : {}),
@@ -198,12 +216,38 @@ export async function getGallery(limit?: number) {
       thumbnailUrl: photo.thumbnailUrl,
       caption: photo.caption,
     }));
-  }, limit ? demoGallery.slice(0, limit) : demoGallery);
+  });
+}
+
+export async function getGalleryPage(requestedPage: number, pageSize = 6) {
+  return fromDatabase(async () => {
+    const totalCount = await prisma.galleryPhoto.count();
+    const bounds = pageBounds(totalCount, requestedPage, pageSize);
+    const photos = await prisma.galleryPhoto.findMany({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      skip: bounds.skip,
+      take: pageSize,
+    });
+    return {
+      photos: photos.map<GalleryItem>((photo) => ({ id: photo.id, imageUrl: photo.imageUrl, thumbnailUrl: photo.thumbnailUrl, caption: photo.caption })),
+      page: bounds.page,
+      totalPages: bounds.totalPages,
+    };
+  });
+}
+
+export async function getTestimonials(): Promise<TestimonialSummary[]> {
+  return fromDatabase(
+    () => prisma.testimonial.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      select: { id: true, quote: true, name: true, role: true, company: true, photoUrl: true },
+    }),
+  );
 }
 
 export async function getFounder(slug: string) {
-  const demo = demoFounders.find((founder) => founder.slug === slug);
-  return withFallback(async () => {
+  return fromDatabase(async () => {
     const idSuffix = slug.split("-").at(-1) || "";
     const user = await prisma.user.findFirst({
       where: { id: { endsWith: idSuffix }, status: "ACTIVE" },
@@ -233,12 +277,9 @@ export async function getFounder(slug: string) {
       .filter((product, index, all) => all.findIndex((item) => item.id === product.id) === index)
       .map(mapProduct);
     return { founder, products };
-  }, demo ? { founder: demo, products: demoProducts.filter((product) => product.founder.id === demo.id || product.coFounders.some((coFounder) => coFounder.id === demo.id)) } : null);
+  });
 }
 
 export async function getSiteSettings() {
-  return withFallback(
-    () => prisma.siteSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }),
-    { id: 1, applyFormUrl: null, instagramUrl: null, linkedinUrl: null, contactEmail: null, galleryMaxUploadMb: 8, updatedAt: new Date() },
-  );
+  return fromDatabase(() => prisma.siteSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }));
 }

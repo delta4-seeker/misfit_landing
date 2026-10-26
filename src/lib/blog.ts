@@ -1,0 +1,52 @@
+import "server-only";
+
+import { unstable_noStore as noStore } from "next/cache";
+
+import { pageBounds } from "@/lib/pagination";
+import { prisma } from "@/lib/prisma";
+
+const publishedWhere = () => ({
+  status: "PUBLISHED" as const,
+  publishedAt: { lte: new Date() },
+});
+
+export async function getPublishedBlogs() {
+  noStore();
+  return prisma.blogPost.findMany({
+    where: publishedWhere(),
+    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+  });
+}
+
+export async function getPublishedBlogsPage(requestedPage: number, pageSize = 6) {
+  noStore();
+  const totalCount = await prisma.blogPost.count({ where: publishedWhere() });
+  const bounds = pageBounds(totalCount, requestedPage, pageSize);
+  const posts = await prisma.blogPost.findMany({
+    where: publishedWhere(),
+    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+    skip: bounds.skip,
+    take: pageSize,
+  });
+  return { posts, page: bounds.page, totalPages: bounds.totalPages };
+}
+
+export async function getPublishedBlog(slug: string) {
+  noStore();
+  return prisma.blogPost.findFirst({ where: { slug, ...publishedWhere() } });
+}
+
+export async function getBlogNavigation(slug: string) {
+  noStore();
+  const posts = await prisma.blogPost.findMany({
+    where: publishedWhere(),
+    orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+    select: { slug: true, title: true, excerpt: true, publishedAt: true, readingMinutes: true },
+  });
+  const index = posts.findIndex((post) => post.slug === slug);
+  return {
+    previous: index >= 0 ? posts[index + 1] ?? null : null,
+    next: index > 0 ? posts[index - 1] : null,
+    other: posts.filter((post) => post.slug !== slug).slice(0, 3),
+  };
+}

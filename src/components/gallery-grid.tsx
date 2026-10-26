@@ -14,7 +14,6 @@ export function GalleryGrid({ photos, preview = false }: { photos: GalleryItem[]
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={photo.thumbnailUrl || photo.imageUrl} alt={photo.caption || "Misfit Founders Club gathering"} loading="lazy" />
             </button>
-            {photo.caption && <figcaption>{photo.caption}</figcaption>}
           </figure>
         ))}
       </div>

@@ -13,6 +13,7 @@ import { consumeRateLimit } from "@/lib/rate-limit";
 import { deleteStoredImage, uploadImage } from "@/lib/storage";
 import { founderSlug, slugify } from "@/lib/utils";
 import { instagramHandleSchema, secureExternalUrlSchema } from "@/lib/validation";
+import { parseWhatsAppExport } from "@/lib/whatsapp-import";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -62,18 +63,18 @@ const commentSchema = z.string().trim().min(2, "Write at least 2 characters.").m
 
 export async function createProductComment(slug: string, formData: FormData) {
   const user = await requireActiveMember(`/products/${slug}#comments`);
-  if (!await consumeRateLimit("product-comment", user.id, 10, 10 * MINUTE)) {
-    redirect(`/products/${slug}?commentError=Too+many+comments.+Please+try+again+later.#comments`);
-  }
   const parsed = commentSchema.safeParse(formData.get("body"));
   if (!parsed.success) {
     redirect(`/products/${slug}?commentError=${encodeURIComponent(parsed.error.issues[0]?.message || "Check your comment.")}#comments`);
   }
   const product = await liveProductBySlug(slug);
+  if (!await consumeRateLimit("product-comment", user.id, 10, 10 * MINUTE)) {
+    redirect(`/products/${slug}?commentError=Too+many+comments.+Please+try+again+later.#comments`);
+  }
   await prisma.productComment.create({ data: { productId: product.id, authorId: user.id, body: parsed.data } });
   revalidatePath(`/products/${slug}`);
   revalidatePath("/products");
-  redirect(`/products/${slug}#comments`);
+  redirect(`/products/${slug}?commentPosted=1#comments`);
 }
 
 export async function deleteProductComment(slug: string, commentId: string) {
@@ -391,6 +392,123 @@ export async function adminCreateEvent(formData: FormData) {
   revalidatePath("/events");
 }
 
+const blogSchema = z.object({
+  title: z.string().trim().min(4).max(160),
+  kicker: z.string().trim().max(80),
+  excerpt: z.string().trim().min(20).max(320),
+  body: z.string().trim().min(100).max(50_000),
+  authorName: z.string().trim().min(2).max(100),
+});
+
+export async function adminSaveBlog(formData: FormData) {
+  const actor = await requireAdmin();
+  const id = String(formData.get("id") || "").trim();
+  const parsed = blogSchema.safeParse({
+    title: formData.get("title"),
+    kicker: formData.get("kicker") || "",
+    excerpt: formData.get("excerpt"),
+    body: formData.get("body"),
+    authorName: formData.get("authorName"),
+  });
+  if (!parsed.success) redirect(`/admin?view=blogs${id ? `&edit=${encodeURIComponent(id)}` : ""}&error=${encodeURIComponent(parsed.error.issues[0]?.message || "Check the article.")}`);
+  const existing = id ? await prisma.blogPost.findUnique({ where: { id } }) : null;
+  if (id && !existing) throw new Error("Blog post not found.");
+  const file = formData.get("coverImage");
+  let coverImageUrl: string | undefined;
+  if (file instanceof File && file.size) {
+    try { coverImageUrl = await uploadImage(file, "blogs", 6); }
+    catch (error) { redirect(`/admin?view=blogs${id ? `&edit=${encodeURIComponent(id)}` : ""}&error=${encodeURIComponent(error instanceof Error ? error.message : "Cover upload failed.")}`); }
+  }
+  const status = formData.get("published") === "on" ? "PUBLISHED" as const : "DRAFT" as const;
+  const readingMinutes = Math.max(1, Math.ceil(parsed.data.body.split(/\s+/).length / 220));
+  let slug = existing?.slug;
+  if (!slug) {
+    const base = slugify(parsed.data.title) || "post";
+    slug = base;
+    let suffix = 2;
+    while (await prisma.blogPost.findUnique({ where: { slug }, select: { id: true } })) slug = `${base}-${suffix++}`;
+  }
+  const data = {
+    title: parsed.data.title,
+    slug,
+    kicker: parsed.data.kicker || null,
+    excerpt: parsed.data.excerpt,
+    body: parsed.data.body,
+    authorName: parsed.data.authorName,
+    tags: [],
+    status,
+    readingMinutes,
+    ...(coverImageUrl ? { coverImageUrl } : {}),
+    publishedAt: status === "PUBLISHED" ? existing?.publishedAt || new Date() : null,
+  };
+  let post;
+  try {
+    post = existing
+      ? await prisma.blogPost.update({ where: { id: existing.id }, data })
+      : await prisma.blogPost.create({ data });
+  } catch (error) {
+    if (coverImageUrl) await deleteStoredImage(coverImageUrl);
+    throw error;
+  }
+  if (coverImageUrl && existing?.coverImageUrl && existing.coverImageUrl !== coverImageUrl) await deleteStoredImage(existing.coverImageUrl);
+  await audit(actor.id, existing ? "UPDATE_BLOG" : "CREATE_BLOG", "BlogPost", post.id, { title: post.title, status: post.status });
+  revalidatePath("/blog");
+  revalidatePath(`/blog/${post.slug}`);
+  revalidatePath("/admin");
+  redirect("/admin?view=blogs&saved=1");
+}
+
+const testimonialSchema = z.object({
+  quote: z.string().trim().min(40).max(2_000),
+  name: z.string().trim().min(2).max(100),
+  role: z.string().trim().min(2).max(160),
+  company: z.string().trim().min(2).max(120),
+  sortOrder: z.coerce.number().int().min(0).max(10_000),
+});
+
+export async function adminSaveTestimonial(formData: FormData) {
+  const actor = await requireAdmin();
+  const id = String(formData.get("id") || "").trim();
+  const parsed = testimonialSchema.safeParse({
+    quote: formData.get("quote"),
+    name: formData.get("name"),
+    role: formData.get("role"),
+    company: formData.get("company"),
+    sortOrder: formData.get("sortOrder") || "0",
+  });
+  if (!parsed.success) redirect(`/admin?view=testimonials${id ? `&edit=${encodeURIComponent(id)}` : ""}&error=${encodeURIComponent(parsed.error.issues[0]?.message || "Check the testimonial.")}`);
+  const existing = id ? await prisma.testimonial.findUnique({ where: { id } }) : null;
+  if (id && !existing) throw new Error("Testimonial not found.");
+  const file = formData.get("photo");
+  if ((!existing || !existing.photoUrl) && (!(file instanceof File) || !file.size)) {
+    redirect(`/admin?view=testimonials${id ? `&edit=${encodeURIComponent(id)}` : ""}&error=Choose+a+photo+for+this+testimonial.`);
+  }
+  let photoUrl: string | undefined;
+  if (file instanceof File && file.size) {
+    try { photoUrl = await uploadImage(file, "testimonials", 5); }
+    catch (error) { redirect(`/admin?view=testimonials${id ? `&edit=${encodeURIComponent(id)}` : ""}&error=${encodeURIComponent(error instanceof Error ? error.message : "Photo upload failed.")}`); }
+  }
+  const data = {
+    ...parsed.data,
+    active: formData.get("active") === "on",
+    ...(photoUrl ? { photoUrl } : {}),
+  };
+  let testimonial;
+  try {
+    testimonial = existing
+      ? await prisma.testimonial.update({ where: { id: existing.id }, data })
+      : await prisma.testimonial.create({ data });
+  } catch (error) {
+    if (photoUrl) await deleteStoredImage(photoUrl);
+    throw error;
+  }
+  if (photoUrl && existing?.photoUrl && existing.photoUrl !== photoUrl) await deleteStoredImage(existing.photoUrl);
+  await audit(actor.id, existing ? "UPDATE_TESTIMONIAL" : "CREATE_TESTIMONIAL", "Testimonial", testimonial.id, { name: testimonial.name, active: testimonial.active });
+  revalidatePath("/");
+  revalidatePath("/admin");
+  redirect("/admin?view=testimonials&saved=1");
+}
+
 export async function adminAddGalleryPhoto(formData: FormData) {
   const actor = await requireAdmin();
   const file = formData.get("image");
@@ -406,13 +524,15 @@ export async function adminAddGalleryPhoto(formData: FormData) {
   revalidatePath("/gallery");
 }
 
-export async function adminDelete(kind: "product" | "event" | "photo" | "subscriber" | "category" | "comment" | "user" | "invitation", id: string) {
-  const safeKind = z.enum(["product", "event", "photo", "subscriber", "category", "comment", "user", "invitation"]).parse(kind);
+export async function adminDelete(kind: "product" | "event" | "photo" | "subscriber" | "category" | "comment" | "user" | "invitation" | "blog" | "testimonial", id: string) {
+  const safeKind = z.enum(["product", "event", "photo", "subscriber", "category", "comment", "user", "invitation", "blog", "testimonial"]).parse(kind);
   const actor = await requireAdmin(safeKind === "user");
   const mediaUrls: Array<string | null | undefined> = [];
   if (safeKind === "product") mediaUrls.push((await prisma.product.findUnique({ where: { id }, select: { logoUrl: true } }))?.logoUrl);
   if (safeKind === "event") mediaUrls.push((await prisma.event.findUnique({ where: { id }, select: { coverImageUrl: true } }))?.coverImageUrl);
   if (safeKind === "photo") mediaUrls.push((await prisma.galleryPhoto.findUnique({ where: { id }, select: { imageUrl: true } }))?.imageUrl);
+  if (safeKind === "blog") mediaUrls.push((await prisma.blogPost.findUnique({ where: { id }, select: { coverImageUrl: true } }))?.coverImageUrl);
+  if (safeKind === "testimonial") mediaUrls.push((await prisma.testimonial.findUnique({ where: { id }, select: { photoUrl: true } }))?.photoUrl);
   if (safeKind === "product") await prisma.product.delete({ where: { id } });
   if (safeKind === "event") await prisma.event.delete({ where: { id } });
   if (safeKind === "photo") await prisma.galleryPhoto.delete({ where: { id } });
@@ -420,6 +540,8 @@ export async function adminDelete(kind: "product" | "event" | "photo" | "subscri
   if (safeKind === "category") await prisma.category.delete({ where: { id } });
   if (safeKind === "comment") await prisma.productComment.delete({ where: { id } });
   if (safeKind === "invitation") await prisma.coFounderInvite.delete({ where: { id } });
+  if (safeKind === "blog") await prisma.blogPost.delete({ where: { id } });
+  if (safeKind === "testimonial") await prisma.testimonial.delete({ where: { id } });
   if (safeKind === "user") {
     const target = await prisma.user.findUnique({ where: { id }, select: {
       id: true, email: true, isSuperAdmin: true, profilePicture: true, products: { select: { logoUrl: true } },
@@ -479,6 +601,114 @@ export async function adminRevokeAccess(userId: string) {
   if (!target || target.isSuperAdmin || target.id === actor.id) throw new Error("Super-admin access cannot be revoked here.");
   await prisma.user.update({ where: { id: target.id }, data: { isAdmin: false } });
   await audit(actor.id, "REVOKE_ADMIN", "User", target.id, { email: target.email });
+  revalidatePath("/admin");
+}
+
+const whatsappImportSchema = z.object({
+  groupName: z.string().trim().min(2).max(120),
+  dateOrder: z.enum(["DMY", "MDY"]),
+});
+
+export async function adminImportWhatsAppExport(formData: FormData) {
+  const actor = await requireAdmin();
+  const parsed = whatsappImportSchema.safeParse({
+    groupName: formData.get("groupName"),
+    dateOrder: formData.get("dateOrder"),
+  });
+  if (!parsed.success) redirect(`/admin?view=member-activity&error=${encodeURIComponent(parsed.error.issues[0]?.message || "Check the import details.")}`);
+  const file = formData.get("chatExport");
+  if (!(file instanceof File) || !file.size) redirect("/admin?view=member-activity&error=Choose+a+WhatsApp+text+export.");
+  if (file.size > 8 * 1024 * 1024) redirect("/admin?view=member-activity&error=Keep+the+export+under+8+MB.");
+  const text = await file.text();
+  if (text.includes("\0")) redirect("/admin?view=member-activity&error=Upload+the+TXT+file+from+the+WhatsApp+export.");
+
+  const groupKey = `import:${slugify(parsed.data.groupName) || "whatsapp-group"}`;
+  const result = parseWhatsAppExport(text, groupKey, parsed.data.dateOrder);
+  if (!result.messages.length) {
+    redirect("/admin?view=member-activity&error=No+messages+were+recognized.+Check+the+date+order+and+upload+the+chat+TXT+file.");
+  }
+
+  const imported = await prisma.$transaction(async (tx) => {
+    const group = await tx.whatsAppGroup.upsert({
+      where: { externalId: groupKey },
+      create: { externalId: groupKey, name: parsed.data.groupName },
+      update: { name: parsed.data.groupName },
+    });
+    const latestMessageAt = result.messages.reduce((latest, message) => message.sentAt > latest ? message.sentAt : latest, result.messages[0].sentAt);
+    const members = new Map<string, { id: string }>();
+    for (const message of result.messages) {
+      if (members.has(message.senderExternalId)) continue;
+      const member = await tx.whatsAppMember.upsert({
+        where: { externalId: message.senderExternalId },
+        create: {
+          externalId: message.senderExternalId,
+          displayName: message.senderLabel,
+          phone: message.phone,
+          firstSeenAt: message.sentAt,
+          lastSeenAt: message.sentAt,
+        },
+        update: {
+          displayName: message.senderLabel,
+          phone: message.phone,
+          lastSeenAt: latestMessageAt,
+        },
+        select: { id: true },
+      });
+      members.set(message.senderExternalId, member);
+    }
+    const batch = await tx.whatsAppImportBatch.create({
+      data: { groupId: group.id, fileName: file.name.slice(0, 240) || null },
+    });
+    let importedMessages = 0;
+    for (let offset = 0; offset < result.messages.length; offset += 750) {
+      const chunk = result.messages.slice(offset, offset + 750);
+      const created = await tx.whatsAppMessage.createMany({
+        data: chunk.map((message) => ({
+          externalId: message.externalId,
+          groupId: group.id,
+          authorId: members.get(message.senderExternalId)!.id,
+          importBatchId: batch.id,
+          sentAt: message.sentAt,
+          kind: message.kind,
+          source: "IMPORT" as const,
+        })),
+        skipDuplicates: true,
+      });
+      importedMessages += created.count;
+    }
+    await tx.whatsAppGroup.update({ where: { id: group.id }, data: { lastMessageAt: latestMessageAt } });
+    await tx.whatsAppImportBatch.update({
+      where: { id: batch.id },
+      data: { importedMessages, skippedMessages: result.messages.length - importedMessages },
+    });
+    return { batchId: batch.id, importedMessages, skippedMessages: result.messages.length - importedMessages };
+  });
+  await audit(actor.id, "IMPORT_WHATSAPP_ACTIVITY", "WhatsAppImportBatch", imported.batchId, imported);
+  revalidatePath("/admin");
+  redirect(`/admin?view=member-activity&imported=${imported.importedMessages}&skipped=${imported.skippedMessages}`);
+}
+
+export async function adminLinkWhatsAppMember(memberId: string, formData: FormData) {
+  const actor = await requireAdmin();
+  const linkedUserId = String(formData.get("linkedUserId") || "").trim() || null;
+  const member = await prisma.whatsAppMember.findUnique({ where: { id: memberId }, select: { id: true, linkedUserId: true } });
+  if (!member) throw new Error("WhatsApp member not found.");
+  if (linkedUserId && !await prisma.user.findUnique({ where: { id: linkedUserId }, select: { id: true } })) throw new Error("Portal member not found.");
+  await prisma.whatsAppMember.update({ where: { id: member.id }, data: { linkedUserId } });
+  await audit(actor.id, "LINK_WHATSAPP_MEMBER", "WhatsAppMember", member.id, { previousUserId: member.linkedUserId, linkedUserId });
+  revalidatePath("/admin");
+}
+
+export async function adminDeleteWhatsAppImport(batchId: string) {
+  const actor = await requireAdmin();
+  const batch = await prisma.whatsAppImportBatch.findUnique({ where: { id: batchId }, select: { id: true, fileName: true } });
+  if (!batch) return;
+  const deleted = await prisma.$transaction(async (tx) => {
+    const messages = await tx.whatsAppMessage.deleteMany({ where: { importBatchId: batch.id, source: "IMPORT" } });
+    await tx.whatsAppImportBatch.delete({ where: { id: batch.id } });
+    return messages.count;
+  });
+  await audit(actor.id, "DELETE_WHATSAPP_IMPORT", "WhatsAppImportBatch", batch.id, { fileName: batch.fileName, deletedMessages: deleted });
   revalidatePath("/admin");
 }
 

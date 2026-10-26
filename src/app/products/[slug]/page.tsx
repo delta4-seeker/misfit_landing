@@ -19,7 +19,7 @@ export default async function ProductPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ commentError?: string }>;
+  searchParams: Promise<{ commentError?: string; commentPosted?: string }>;
 }) {
   const { slug } = await params;
   const [product, session, query] = await Promise.all([getProduct(slug), auth(), searchParams]);
@@ -39,7 +39,7 @@ export default async function ProductPage({
           ) : <span>{product.name.slice(0, 1)}</span>}
         </div>
         <div className="product-detail-copy">
-          <div className="product-card-meta"><span className="tag">{product.category.name}</span>{product.builtInNepal && <span className="tag tag-ghost">Made in Nepal</span>}</div>
+          <div className="product-card-meta"><span className="tag">{product.category.name}</span></div>
           <h1>{product.name}</h1>
           <p className="lead">{product.tagline}</p>
           <p>{product.description}</p>
@@ -55,7 +55,7 @@ export default async function ProductPage({
             <strong>{engagement.upvoteCount} {engagement.upvoteCount === 1 ? "upvote" : "upvotes"}</strong>
             <span>{engagement.comments.length} {engagement.comments.length === 1 ? "comment" : "comments"}</span>
           </div>
-          <div className="button-row left"><a className="btn btn-lime" href={product.websiteUrl} target="_blank" rel="noreferrer">Visit product ↗</a><Link className="btn btn-outline" href="#founders">Show founders</Link>{session?.user.id === product.founder.id && <Link className="btn btn-outline" href={`/products/${product.slug}/manage`}>Manage listing</Link>}</div>
+          <div className="button-row left"><a className="btn btn-lime" href={product.websiteUrl} target="_blank" rel="noreferrer">Visit product ↗</a>{session?.user.id === product.founder.id && <Link className="btn btn-outline" href={`/products/${product.slug}/manage`}>Manage listing</Link>}</div>
         </div>
       </div>
       <section className="product-founders" id="founders" aria-labelledby="product-founders-title">
@@ -75,15 +75,16 @@ export default async function ProductPage({
       </section>
       <section className="comments-section" id="comments">
         <div className="comments-heading">
-          <div><h2>Founder feedback.</h2><p>Questions, useful context, and honest reactions from the club.</p></div>
+          <div><h2>Community feedback.</h2><p>Questions, useful context, and honest reactions from the club.</p></div>
           <span>{engagement.comments.length.toString().padStart(2, "0")}</span>
         </div>
         {canInteract ? (
           <form className="comment-form" action={createProductComment.bind(null, product.slug)}>
-            <label htmlFor="comment-body">Add a comment</label>
-            <textarea id="comment-body" name="body" maxLength={500} minLength={2} rows={4} placeholder="What would be useful for this founder to hear?" required />
+            <label htmlFor="comment-body">Add feedback</label>
+            <textarea id="comment-body" name="body" maxLength={500} minLength={2} rows={4} placeholder="Share a useful question or perspective about this product." required />
             {query.commentError && <p className="form-error" role="alert">{query.commentError}</p>}
-            <button className="btn btn-dark" type="submit">Post comment ↗</button>
+            {query.commentPosted && <p className="success-note" role="status">Your feedback has been posted.</p>}
+            <button className="btn btn-dark" type="submit">Post feedback ↗</button>
           </form>
         ) : (
           <div className="comment-signin"><p>Join the club to upvote and join the conversation.</p><Link className="btn btn-lime" href={joinHref}>Join Club</Link></div>
@@ -105,7 +106,7 @@ export default async function ProductPage({
               </article>
             ))}
           </div>
-        ) : <p className="comments-empty">No comments yet. Start with a useful question.</p>}
+        ) : <p className="comments-empty">No feedback yet. Start with a useful question.</p>}
       </section>
     </article>
   );

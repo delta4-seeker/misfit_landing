@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import {
-  adminAddGalleryPhoto, adminCreateCategory, adminCreateEvent, adminDelete, adminGrantAccess, adminRevokeAccess,
-  adminSaveSettings, adminUpdateProduct, adminUpdateUser,
+  adminAddGalleryPhoto, adminCreateCategory, adminCreateEvent, adminDelete, adminGrantAccess, adminRevokeAccess, adminSaveBlog, adminSaveTestimonial,
+  adminDeleteWhatsAppImport, adminImportWhatsAppExport, adminLinkWhatsAppMember, adminSaveSettings, adminUpdateProduct, adminUpdateUser,
 } from "@/app/actions";
 import { auth } from "@/auth";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
@@ -13,23 +14,28 @@ import { prisma } from "@/lib/prisma";
 export const metadata: Metadata = { title: "Club admin" };
 export const dynamic = "force-dynamic";
 
-const views = ["overview", "users", "products", "engagement", "invitations", "categories", "events", "gallery", "newsletter", "settings", "admins", "audit"] as const;
+const views = ["overview", "users", "products", "blogs", "testimonials", "engagement", "member-activity", "invitations", "categories", "events", "gallery", "newsletter", "settings", "admins", "audit"] as const;
 type View = typeof views[number];
+type AdminSearch = { view?: string; period?: string; group?: string; error?: string; imported?: string; skipped?: string; edit?: string; saved?: string };
 
-export default async function AdminPage({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function AdminPage({ searchParams }: { searchParams: Promise<AdminSearch> }) {
   const session = await auth();
   if (!session?.user) redirect("/join?next=/admin");
   if (session.user.status !== "ACTIVE" || !session.user.isAdmin) notFound();
-  const requested = (await searchParams).view;
+  const search = await searchParams;
+  const requested = search.view;
   const view: View = views.includes(requested as View) ? requested as View : "overview";
   return (
     <section className="admin-shell section-shell">
-      <aside className="admin-sidebar"><div><h1>Admin panel.</h1><span>{session.user.fullName || session.user.name}</span></div><nav>{views.filter((item) => item !== "admins" || session.user.isSuperAdmin).map((item) => <Link className={view === item ? "active" : ""} href={`/admin?view=${item}`} key={item}>{item}</Link>)}</nav></aside>
+      <aside className="admin-sidebar"><div><h1>Admin panel.</h1><span>{session.user.fullName || session.user.name}</span></div><nav>{views.filter((item) => item !== "admins" || session.user.isSuperAdmin).map((item) => <Link className={view === item ? "active" : ""} href={`/admin?view=${item}`} key={item}>{item.replaceAll("-", " ")}</Link>)}</nav></aside>
       <div className="admin-main">
         {view === "overview" && <AdminOverview />}
         {view === "users" && <AdminUsers actorId={session.user.id} />}
         {view === "products" && <AdminProducts />}
+        {view === "blogs" && <AdminBlogs search={search} />}
+        {view === "testimonials" && <AdminTestimonials search={search} />}
         {view === "engagement" && <AdminEngagement />}
+        {view === "member-activity" && <AdminMemberActivity search={search} />}
         {view === "invitations" && <AdminInvitations />}
         {view === "categories" && <AdminCategories />}
         {view === "events" && <AdminEvents />}
@@ -41,6 +47,69 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       </div>
     </section>
   );
+}
+
+async function AdminMemberActivity({ search }: { search: AdminSearch }) {
+  const period = search.period === "7d" || search.period === "30d" ? search.period : "all";
+  const [clock] = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT NOW() AS now`;
+  const since = period === "7d" ? new Date(clock.now.getTime() - 7 * 86_400_000) : period === "30d" ? new Date(clock.now.getTime() - 30 * 86_400_000) : undefined;
+  const groups = await prisma.whatsAppGroup.findMany({ orderBy: { name: "asc" } });
+  const selectedGroup = groups.some((group) => group.id === search.group) ? search.group : undefined;
+  const messageWhere = { deletedAt: null, ...(since ? { sentAt: { gte: since } } : {}), ...(selectedGroup ? { groupId: selectedGroup } : {}) };
+  const reactionWhere = { removedAt: null, ...(since ? { reactedAt: { gte: since } } : {}), ...(selectedGroup ? { message: { groupId: selectedGroup } } : {}) };
+  const [members, users, messageCounts, earnedCounts, givenCounts, connection, batches] = await Promise.all([
+    prisma.whatsAppMember.findMany({ include: { linkedUser: { select: { id: true, fullName: true, name: true, email: true, profilePicture: true, image: true } } }, orderBy: [{ displayName: "asc" }, { createdAt: "asc" }] }),
+    prisma.user.findMany({ where: { status: "ACTIVE" }, select: { id: true, fullName: true, name: true, email: true }, orderBy: [{ fullName: "asc" }, { email: "asc" }] }),
+    prisma.whatsAppMessage.groupBy({ by: ["authorId"], where: messageWhere, _count: { _all: true }, _max: { sentAt: true } }),
+    prisma.whatsAppReaction.groupBy({ by: ["recipientId"], where: reactionWhere, _count: { _all: true } }),
+    prisma.whatsAppReaction.groupBy({ by: ["reactorId"], where: reactionWhere, _count: { _all: true } }),
+    prisma.whatsAppConnectionState.findUnique({ where: { id: 1 } }),
+    prisma.whatsAppImportBatch.findMany({ take: 8, include: { group: { select: { name: true } } }, orderBy: { createdAt: "desc" } }),
+  ]);
+  const messageMap = new Map(messageCounts.map((item) => [item.authorId, { count: item._count._all, lastActive: item._max.sentAt }]));
+  const earnedMap = new Map(earnedCounts.map((item) => [item.recipientId, item._count._all]));
+  const givenMap = new Map(givenCounts.map((item) => [item.reactorId, item._count._all]));
+  const rows = members.map((member) => ({
+    ...member,
+    messages: messageMap.get(member.id)?.count || 0,
+    lastActive: messageMap.get(member.id)?.lastActive || member.lastSeenAt,
+    reactionsEarned: earnedMap.get(member.id) || 0,
+    reactionsGiven: givenMap.get(member.id) || 0,
+  })).sort((a, b) => b.messages - a.messages || b.reactionsEarned - a.reactionsEarned || (a.displayName || "").localeCompare(b.displayName || ""));
+  const totalMessages = rows.reduce((sum, member) => sum + member.messages, 0);
+  const totalReactions = rows.reduce((sum, member) => sum + member.reactionsEarned, 0);
+  const activeMembers = rows.filter((member) => member.messages > 0).length;
+  const unmatchedMembers = rows.filter((member) => !member.linkedUserId).length;
+  const filterHref = (nextPeriod: string, group = selectedGroup) => `/admin?view=member-activity&period=${nextPeriod}${group ? `&group=${encodeURIComponent(group)}` : ""}`;
+  const state = connection?.status || "NOT_CONFIGURED";
+
+  return <>
+    <AdminTitle title="Member activity." subtitle="Message participation and reactions earned in the club WhatsApp group." />
+    {search.error && <div className="admin-notice admin-notice-error">{search.error}</div>}
+    {search.imported && <div className="admin-notice">Imported {search.imported} new messages{Number(search.skipped || 0) ? ` and skipped ${search.skipped} duplicates` : ""}. Message contents were not stored.</div>}
+    <section className="whatsapp-health admin-card">
+      <div><span className={`connection-dot connection-${state.toLowerCase()}`} /><div><strong>{state.replaceAll("_", " ")}</strong><small>{connection?.lastEventAt ? `Last activity ${formatAdminDate(connection.lastEventAt)}` : "The live collector has not connected yet."}</small></div></div>
+      <div className="privacy-note"><strong>Metadata only</strong><small>Messages, photos, documents and call content are never stored.</small></div>
+    </section>
+    <div className="stat-grid whatsapp-stats"><article className="stat-hero"><span>Messages</span><strong>{totalMessages}</strong></article><article><span>Reactions earned</span><strong>{totalReactions}</strong></article><article><span>Active members</span><strong>{activeMembers}</strong></article><article><span>Unmatched identities</span><strong>{unmatchedMembers}</strong></article></div>
+    <section className="activity-toolbar">
+      <nav aria-label="Activity period">{["7d", "30d", "all"].map((item) => <Link className={period === item ? "active" : ""} href={filterHref(item)} key={item}>{item === "all" ? "All time" : item}</Link>)}</nav>
+      <form method="get"><input type="hidden" name="view" value="member-activity" /><input type="hidden" name="period" value={period} /><select className="field-input compact" name="group" defaultValue={selectedGroup || ""}><option value="">All groups</option>{groups.map((group) => <option value={group.id} key={group.id}>{group.name}</option>)}</select><button className="btn btn-dark btn-small" type="submit">Filter</button></form>
+    </section>
+    <section className="admin-card activity-table-card">
+      <div className="table-wrap"><table><thead><tr><th>WhatsApp member</th><th>Portal profile</th><th>Messages</th><th>Earned</th><th>Given</th><th>Last active</th></tr></thead><tbody>{rows.length ? rows.map((member) => <tr key={member.id}><td><div className="activity-person"><span>{initials(member.displayName || member.phone || "?")}</span><div><strong>{member.displayName || member.phone || "Unknown member"}</strong><small>{member.phone || member.externalId.replace(/^import:/, "Imported · ").slice(0, 38)}</small></div></div></td><td><form className="member-link-form" action={adminLinkWhatsAppMember.bind(null, member.id)}><select className="field-input compact" name="linkedUserId" defaultValue={member.linkedUserId || ""}><option value="">Not matched</option>{users.map((user) => <option value={user.id} key={user.id}>{user.fullName || user.name || user.email || "Unnamed member"}</option>)}</select><button className="text-button" type="submit">Save</button></form></td><td><strong>{member.messages}</strong></td><td><strong>{member.reactionsEarned}</strong></td><td>{member.reactionsGiven}</td><td>{member.lastActive ? formatAdminDate(member.lastActive) : "—"}</td></tr>) : <tr><td colSpan={6}>No WhatsApp activity yet. Import an export below to begin.</td></tr>}</tbody></table></div>
+    </section>
+    <section className="whatsapp-setup-grid">
+      <form className="admin-card whatsapp-import-form" action={adminImportWhatsAppExport}>
+        <div><h2>Import existing activity</h2><p>In WhatsApp choose Export chat → Without media, unzip it, then upload the TXT file. Historical exports usually do not contain reliable reaction data.</p></div>
+        <label className="form-field full">Group name<input className="field-input" name="groupName" defaultValue="Misfit Founders Club" required maxLength={120} /></label>
+        <label className="form-field">Date order<select className="field-input" name="dateOrder" defaultValue="DMY"><option value="DMY">Day / month / year</option><option value="MDY">Month / day / year</option></select></label>
+        <label className="form-field full">Chat TXT file<input className="field-input" name="chatExport" type="file" accept=".txt,text/plain" required /></label>
+        <button className="btn btn-lime" type="submit">Import metadata</button>
+      </form>
+      <section className="admin-card import-history"><h2>Recent imports</h2>{batches.length ? batches.map((batch) => <div className="metric-row" key={batch.id}><div><strong>{batch.group.name}</strong><small>{batch.fileName || "WhatsApp export"} · {batch.importedMessages} new · {batch.skippedMessages} skipped</small></div><form action={adminDeleteWhatsAppImport.bind(null, batch.id)}><ConfirmSubmitButton className="text-button danger-button" message="Remove the activity added by this import? Live-collected data will stay intact.">Remove</ConfirmSubmitButton></form></div>) : <p>No imports yet.</p>}</section>
+    </section>
+  </>;
 }
 
 async function AdminOverview() {
@@ -86,6 +155,61 @@ async function AdminEvents() {
   return <><AdminTitle title="Events." subtitle="Create a registration-first Luma listing." /><form className="panel-form admin-card" action={adminCreateEvent}><label className="form-field">Title<input className="field-input" name="title" required /></label><label className="form-field">Starts<input className="field-input" name="startsAt" type="datetime-local" required /></label><label className="form-field">Venue<input className="field-input" name="venue" required /></label><label className="form-field">Luma URL<input className="field-input" name="lumaUrl" type="url" required /></label><label className="form-field full">Description<textarea className="field-input" name="description" required rows={3} /></label><label className="form-field">Capacity<input className="field-input" name="capacity" type="number" min="0" /></label><label className="form-field">Price NPR<input className="field-input" name="priceNpr" type="number" min="0" step="0.01" /></label><label className="form-field full">Cover image<input className="field-input" name="coverImage" type="file" accept="image/jpeg,image/png,image/webp" /></label><button className="btn btn-lime" type="submit">Create event</button></form><div className="admin-list">{events.map((event) => <div className="admin-row" key={event.id}><div><strong>{event.title} {event.slug.startsWith("test-") && <span className="tag admin-test-tag">Test data</span>}</strong><small>{new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(event.startsAt)} · {event.venue}</small></div><a href={event.lumaUrl} target="_blank" rel="noreferrer">Registration ↗</a><form action={adminDelete.bind(null, "event", event.id)}><ConfirmSubmitButton className="text-button danger-button" message={`Delete ${event.title}?`}>Delete</ConfirmSubmitButton></form></div>)}</div></>;
 }
 
+async function AdminBlogs({ search }: { search: AdminSearch }) {
+  const posts = await prisma.blogPost.findMany({ orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] });
+  const editing = posts.find((post) => post.id === search.edit);
+  return <>
+    <AdminTitle title="Blogs." subtitle="Write field notes, save drafts, publish, edit, or remove articles." />
+    {search.error && <p className="admin-notice admin-notice-error">{search.error}</p>}
+    {search.saved && <p className="admin-notice">Blog post saved.</p>}
+    <form className="panel-form blog-admin-form" action={adminSaveBlog} key={editing?.id || "new"}>
+      <input type="hidden" name="id" value={editing?.id || ""} />
+      <label className="form-field full">Title<input className="field-input" name="title" defaultValue={editing?.title || ""} required minLength={4} maxLength={160} /></label>
+      <label className="form-field">Kicker (optional)<input className="field-input" name="kicker" defaultValue={editing?.kicker || ""} maxLength={80} placeholder="Field notes · 01" /></label>
+      <label className="form-field">Author name<input className="field-input" name="authorName" defaultValue={editing?.authorName || ""} required minLength={2} maxLength={100} /></label>
+      <label className="form-field full">Excerpt<textarea className="field-input" name="excerpt" defaultValue={editing?.excerpt || ""} required minLength={20} maxLength={320} rows={3} /></label>
+      <label className="form-field full">Cover image (optional, JPG, PNG, or WebP up to 6 MB)<input className="field-input" name="coverImage" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+      {editing?.coverImageUrl && <div className="blog-admin-cover"><Image src={editing.coverImageUrl} alt={`Cover for ${editing.title}`} width={150} height={96} unoptimized /><span>Current cover · upload a new image to replace it.</span></div>}
+      <label className="form-field full">Article body<textarea className="field-input blog-admin-body" name="body" defaultValue={editing?.body || ""} required minLength={100} maxLength={50000} rows={16} /><small>Separate paragraphs with a blank line. Use ## for headings, &gt; for quotes, and - for list items.</small></label>
+      <label className="blog-publish-field"><input name="published" type="checkbox" defaultChecked={editing?.status === "PUBLISHED"} /> Publish on the public blog</label>
+      <div className="blog-admin-actions"><button className="btn btn-lime" type="submit">{editing ? "Save article" : "Create article"}</button>{editing && <Link className="btn btn-outline" href="/admin?view=blogs">Cancel edit</Link>}</div>
+    </form>
+    <div className="admin-list">{posts.length ? posts.map((post) => <article className="admin-row blog-admin-row" key={post.id}>
+      <div><strong>{post.title}</strong><small>{post.authorName} · {post.status === "PUBLISHED" ? "Published" : "Draft"} · Updated {formatAdminDate(post.updatedAt)}</small><p>{post.excerpt}</p></div>
+      {post.status === "PUBLISHED" && <Link className="text-button" href={`/blog/${post.slug}`} target="_blank">View ↗</Link>}
+      <Link className="text-button" href={`/admin?view=blogs&edit=${encodeURIComponent(post.id)}`}>Edit</Link>
+      <form action={adminDelete.bind(null, "blog", post.id)}><ConfirmSubmitButton className="text-button danger-button" message={`Delete ${post.title}? This cannot be undone.`}>Delete</ConfirmSubmitButton></form>
+    </article>) : <p className="comments-empty">No blog posts yet. Create the first article above.</p>}</div>
+  </>;
+}
+
+async function AdminTestimonials({ search }: { search: AdminSearch }) {
+  const testimonials = await prisma.testimonial.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] });
+  const editing = testimonials.find((testimonial) => testimonial.id === search.edit);
+  return <>
+    <AdminTitle title="Testimonials." subtitle="Add, edit, arrange, hide, or remove stories shown on the homepage." />
+    {search.error && <p className="admin-notice admin-notice-error">{search.error}</p>}
+    {search.saved && <p className="admin-notice">Testimonial saved.</p>}
+    <form className="panel-form testimonial-admin-form" action={adminSaveTestimonial} key={editing?.id || "new"}>
+      <input type="hidden" name="id" value={editing?.id || ""} />
+      <label className="form-field">Name<input className="field-input" name="name" defaultValue={editing?.name || ""} required maxLength={100} /></label>
+      <label className="form-field">Company<input className="field-input" name="company" defaultValue={editing?.company || ""} required maxLength={120} /></label>
+      <label className="form-field">Role<input className="field-input" name="role" defaultValue={editing?.role || ""} required maxLength={160} /></label>
+      <label className="form-field">Display order<input className="field-input" name="sortOrder" type="number" min="0" max="10000" defaultValue={editing?.sortOrder ?? testimonials.length + 1} required /></label>
+      <label className="form-field full">Message<textarea className="field-input" name="quote" defaultValue={editing?.quote || ""} required minLength={40} maxLength={2000} rows={5} /></label>
+      <label className="form-field full">Photo (JPG, PNG, or WebP, up to 5 MB)<input className="field-input" name="photo" type="file" accept="image/jpeg,image/png,image/webp" required={!editing?.photoUrl} /></label>
+      {editing?.photoUrl && <div className="testimonial-admin-photo"><Image src={editing.photoUrl} alt={`Current photo for ${editing.name}`} width={54} height={54} unoptimized /><span>Current photo · upload a new one to replace it.</span></div>}
+      <label className="testimonial-active-field"><input name="active" type="checkbox" defaultChecked={editing?.active ?? true} /> Show on homepage</label>
+      <div className="testimonial-admin-actions"><button className="btn btn-lime" type="submit">{editing ? "Save testimonial" : "Add testimonial"}</button>{editing && <Link className="btn btn-outline" href="/admin?view=testimonials">Cancel edit</Link>}</div>
+    </form>
+    <div className="admin-list">{testimonials.map((testimonial) => <article className="admin-row testimonial-admin-row" key={testimonial.id}>
+      <div className="testimonial-admin-person">{testimonial.photoUrl ? <Image src={testimonial.photoUrl} alt="" width={54} height={54} unoptimized /> : <span>{initials(testimonial.name)}</span>}<div><strong>{testimonial.name} {testimonial.id.startsWith("preview-") && <span className="tag admin-test-tag">Sample</span>}</strong><small>{testimonial.role} · {testimonial.company || "Company not set"} · Order {testimonial.sortOrder} · {testimonial.active ? "Visible" : "Hidden"}</small><p>{testimonial.quote}</p></div></div>
+      <Link className="text-button" href={`/admin?view=testimonials&edit=${encodeURIComponent(testimonial.id)}`}>Edit</Link>
+      <form action={adminDelete.bind(null, "testimonial", testimonial.id)}><ConfirmSubmitButton className="text-button danger-button" message={`Delete the testimonial by ${testimonial.name}?`}>Delete</ConfirmSubmitButton></form>
+    </article>)}</div>
+  </>;
+}
+
 async function AdminGallery() {
   const photos = await prisma.galleryPhoto.findMany({ orderBy: { createdAt: "desc" } });
   return <><AdminTitle title="Gallery." subtitle="Keep the camera roll human and current." /><form className="admin-card inline-form" action={adminAddGalleryPhoto}><input className="field-input" name="image" type="file" accept="image/jpeg,image/png,image/webp" required /><input className="field-input" name="caption" placeholder="Caption" maxLength={180} /><button className="btn btn-lime" type="submit">Add photo</button></form><div className="admin-gallery-grid">{photos.map((photo) => <figure key={photo.id}>
@@ -121,4 +245,13 @@ function AdminTitle({ title, subtitle }: { title: string; subtitle: string }) {
 
 function isTestRecord(email?: string | null) {
   return email?.toLowerCase().startsWith("test+") ?? false;
+}
+
+function initials(value: string) {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  return (parts.length > 1 ? `${parts[0][0]}${parts.at(-1)![0]}` : parts[0]?.slice(0, 2) || "?").toUpperCase();
+}
+
+function formatAdminDate(value: Date) {
+  return new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(value);
 }

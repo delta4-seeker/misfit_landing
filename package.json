@@ -14,6 +14,8 @@
     "check:auth-flow": "tsx --env-file=.env.local scripts/auth-flow-check.ts",
     "check:storage": "NODE_OPTIONS=--conditions=react-server tsx --env-file=.env.local scripts/storage-check.ts",
     "check:security": "NODE_OPTIONS=--conditions=react-server tsx --env-file=.env.local scripts/security-check.ts",
+    "check:whatsapp-import": "tsx scripts/whatsapp-import-check.ts",
+    "whatsapp:worker": "tsx workers/whatsapp/index.ts",
     "db:generate": "prisma generate",
     "db:migrate": "tsx --env-file=.env.local scripts/prisma-command.ts migrate deploy",
     "db:push": "tsx --env-file=.env.local scripts/prisma-command.ts db push",
@@ -24,8 +26,11 @@
   "dependencies": {
     "@auth/prisma-adapter": "^2.10.0",
     "@prisma/client": "^6.18.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
     "next": "^16.0.0",
     "next-auth": "^5.0.0-beta.30",
+    "pino": "^10.4.0",
+    "qrcode-terminal": "^0.12.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "server-only": "^0.0.1",
@@ -33,6 +38,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.0",
+    "@types/qrcode-terminal": "^0.12.2",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "eslint": "^9.39.0",

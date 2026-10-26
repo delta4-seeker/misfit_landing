@@ -13,8 +13,9 @@ function remaining(date: Date) {
 }
 
 export function EventRow({ event }: { event: EventSummary }) {
-  const [countdown, setCountdown] = useState(() => remaining(event.startsAt));
+  const [countdown, setCountdown] = useState<ReturnType<typeof remaining> | null>(null);
   useEffect(() => {
+    setCountdown(remaining(event.startsAt));
     const timer = window.setInterval(() => setCountdown(remaining(event.startsAt)), 60_000);
     return () => window.clearInterval(timer);
   }, [event.startsAt]);
@@ -37,8 +38,8 @@ export function EventRow({ event }: { event: EventSummary }) {
         </div>
         <div className="event-row-bottom">
           <span>{event.venue}</span>
-          <div className="compact-countdown" aria-label={`${countdown.days} days, ${countdown.hours} hours and ${countdown.minutes} minutes remaining`}>
-            <b>{countdown.days}d</b><b>{countdown.hours}h</b><b>{countdown.minutes}m</b>
+          <div className="compact-countdown" aria-label={countdown ? `${countdown.days} days, ${countdown.hours} hours and ${countdown.minutes} minutes remaining` : "Countdown loading"}>
+            <b>{countdown ? `${countdown.days}d` : "—d"}</b><b>{countdown ? `${countdown.hours}h` : "—h"}</b><b>{countdown ? `${countdown.minutes}m` : "—m"}</b>
           </div>
           <a className="btn btn-dark btn-small" href={event.lumaUrl} target="_blank" rel="noreferrer">Register ↗</a>
         </div>

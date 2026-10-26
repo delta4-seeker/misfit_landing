@@ -27,32 +27,54 @@ enum InviteStatus {
   EXPIRED
 }
 
+enum WhatsAppRecordSource {
+  LIVE
+  IMPORT
+}
+
+enum WhatsAppConnectionStatus {
+  NOT_CONFIGURED
+  PAIRING
+  CONNECTING
+  CONNECTED
+  RECONNECTING
+  DISCONNECTED
+  LOGGED_OUT
+  ERROR
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+}
+
 model User {
-  id               String          @id @default(cuid())
-  name             String?
-  email            String?         @unique
-  emailVerified    DateTime?
-  image             String?
-  fullName          String?
-  phone             String?
-  linkedinUrl       String?
-  instagramHandle  String?
-  profilePicture   String?
-  profileCompleted Boolean         @default(false)
-  status            UserStatus      @default(ACTIVE)
-  isAdmin           Boolean         @default(false)
-  isSuperAdmin      Boolean         @default(false)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  accounts          Account[]
-  sessions          Session[]
-  products          Product[]       @relation("ProductOwner")
-  coFoundedProducts Product[]       @relation("ProductCoFounders")
-  productVotes      ProductVote[]
-  productComments   ProductComment[]
-  invitesAccepted   CoFounderInvite[] @relation("AcceptedInviteUser")
-  galleryPhotos     GalleryPhoto[]
-  auditLogs         AuditLog[]       @relation("AuditActor")
+  id                 String            @id @default(cuid())
+  name               String?
+  email              String?           @unique
+  emailVerified      DateTime?
+  image              String?
+  fullName           String?
+  phone              String?
+  linkedinUrl        String?
+  instagramHandle    String?
+  profilePicture     String?
+  profileCompleted   Boolean           @default(false)
+  status             UserStatus        @default(ACTIVE)
+  isAdmin            Boolean           @default(false)
+  isSuperAdmin       Boolean           @default(false)
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  accounts           Account[]
+  sessions           Session[]
+  products           Product[]         @relation("ProductOwner")
+  coFoundedProducts  Product[]         @relation("ProductCoFounders")
+  productVotes       ProductVote[]
+  productComments    ProductComment[]
+  invitesAccepted    CoFounderInvite[] @relation("AcceptedInviteUser")
+  galleryPhotos      GalleryPhoto[]
+  auditLogs          AuditLog[]        @relation("AuditActor")
+  whatsappIdentities WhatsAppMember[]
 
   @@index([status])
 }
@@ -90,42 +112,42 @@ model VerificationToken {
 }
 
 model Category {
-  id       String    @id @default(cuid())
-  name     String    @unique
-  slug     String    @unique
-  sortOrder Int      @default(0)
-  products Product[]
+  id        String    @id @default(cuid())
+  name      String    @unique
+  slug      String    @unique
+  sortOrder Int       @default(0)
+  products  Product[]
 }
 
 model Product {
-  id               String          @id @default(cuid())
-  ownerId          String
-  owner            User            @relation("ProductOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  coFounders       User[]          @relation("ProductCoFounders")
-  categoryId       String
-  category         Category        @relation(fields: [categoryId], references: [id])
-  name             String
-  slug             String          @unique
-  companyName      String?
-  websiteUrl       String
-  linkedinUrl      String?
-  instagramHandle  String?
-  founderType      String?
-  tagline          String
-  description      String
-  logoUrl          String?
-  foundedMonth     Int?
-  foundedYear      Int?
-  builtInNepal     Boolean         @default(true)
-  exclusive        Boolean         @default(false)
-  featured         Boolean         @default(false)
-  featuredOrder    Int             @default(0)
-  status           ListingStatus   @default(DRAFT)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  invites          CoFounderInvite[]
-  votes            ProductVote[]
-  comments         ProductComment[]
+  id              String            @id @default(cuid())
+  ownerId         String
+  owner           User              @relation("ProductOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  coFounders      User[]            @relation("ProductCoFounders")
+  categoryId      String
+  category        Category          @relation(fields: [categoryId], references: [id])
+  name            String
+  slug            String            @unique
+  companyName     String?
+  websiteUrl      String
+  linkedinUrl     String?
+  instagramHandle String?
+  founderType     String?
+  tagline         String
+  description     String
+  logoUrl         String?
+  foundedMonth    Int?
+  foundedYear     Int?
+  builtInNepal    Boolean           @default(true)
+  exclusive       Boolean           @default(false)
+  featured        Boolean           @default(false)
+  featuredOrder   Int               @default(0)
+  status          ListingStatus     @default(DRAFT)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  invites         CoFounderInvite[]
+  votes           ProductVote[]
+  comments        ProductComment[]
 
   @@index([status, featured, featuredOrder])
   @@index([categoryId])
@@ -172,18 +194,18 @@ model CoFounderInvite {
 }
 
 model Event {
-  id           String   @id @default(cuid())
-  title        String
-  slug         String   @unique
-  startsAt     DateTime
-  venue        String
-  description  String
+  id            String   @id @default(cuid())
+  title         String
+  slug          String   @unique
+  startsAt      DateTime
+  venue         String
+  description   String
   coverImageUrl String?
-  lumaUrl      String
-  capacity     Int?
-  priceNpr     Decimal? @db.Decimal(10, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  lumaUrl       String
+  capacity      Int?
+  priceNpr      Decimal? @db.Decimal(10, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([startsAt])
 }
@@ -214,11 +236,11 @@ model MediaAsset {
 }
 
 model NewsletterSubscriber {
-  id             String   @id @default(cuid())
-  email          String   @unique
-  unsubscribeToken String @unique @default(cuid())
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
+  id               String   @id @default(cuid())
+  email            String   @unique
+  unsubscribeToken String   @unique @default(cuid())
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
 }
 
 model SiteSettings {
@@ -232,14 +254,14 @@ model SiteSettings {
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String?
-  actor     User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
-  action    String
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
   targetType String?
-  targetId  String?
-  changes   Json?
-  createdAt DateTime @default(now())
+  targetId   String?
+  changes    Json?
+  createdAt  DateTime @default(now())
 
   @@index([createdAt])
 }
@@ -260,4 +282,145 @@ model ActionRateLimit {
   updatedAt   DateTime @updatedAt
 
   @@index([expiresAt])
+}
+
+model BlogPost {
+  id             String     @id @default(cuid())
+  title          String
+  slug           String     @unique
+  kicker         String?
+  excerpt        String
+  body           String     @db.Text
+  tags           String[]
+  coverImageUrl  String?
+  authorName     String
+  status         BlogStatus @default(DRAFT)
+  readingMinutes Int        @default(1)
+  publishedAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([status, publishedAt])
+}
+
+model Testimonial {
+  id        String   @id @default(cuid())
+  quote     String   @db.Text
+  name      String
+  role      String
+  company   String
+  photoUrl  String?
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, sortOrder])
+}
+
+model WhatsAppGroup {
+  id            String                @id @default(cuid())
+  externalId    String                @unique
+  name          String
+  enabled       Boolean               @default(true)
+  lastMessageAt DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  messages      WhatsAppMessage[]
+  importBatches WhatsAppImportBatch[]
+
+  @@index([enabled])
+}
+
+model WhatsAppMember {
+  id              String             @id @default(cuid())
+  externalId      String             @unique
+  displayName     String?
+  phone           String?
+  linkedUserId    String?
+  linkedUser      User?              @relation(fields: [linkedUserId], references: [id], onDelete: SetNull)
+  firstSeenAt     DateTime           @default(now())
+  lastSeenAt      DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  messages        WhatsAppMessage[]
+  reactionsGiven  WhatsAppReaction[] @relation("WhatsAppReactionGiver")
+  reactionsEarned WhatsAppReaction[] @relation("WhatsAppReactionRecipient")
+
+  @@index([linkedUserId])
+  @@index([lastSeenAt])
+}
+
+model WhatsAppMessage {
+  id            String               @id @default(cuid())
+  externalId    String
+  groupId       String
+  group         WhatsAppGroup        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  authorId      String
+  author        WhatsAppMember       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  importBatchId String?
+  importBatch   WhatsAppImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  sentAt        DateTime
+  kind          String               @default("text")
+  source        WhatsAppRecordSource
+  deletedAt     DateTime?
+  createdAt     DateTime             @default(now())
+  reactions     WhatsAppReaction[]
+
+  @@unique([groupId, externalId])
+  @@index([authorId, sentAt])
+  @@index([groupId, sentAt])
+  @@index([importBatchId])
+}
+
+model WhatsAppReaction {
+  id          String               @id @default(cuid())
+  messageId   String
+  message     WhatsAppMessage      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  reactorId   String
+  reactor     WhatsAppMember       @relation("WhatsAppReactionGiver", fields: [reactorId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   WhatsAppMember       @relation("WhatsAppReactionRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  emoji       String
+  reactedAt   DateTime
+  removedAt   DateTime?
+  source      WhatsAppRecordSource
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  @@unique([messageId, reactorId])
+  @@index([recipientId, reactedAt])
+  @@index([reactorId, reactedAt])
+}
+
+model WhatsAppImportBatch {
+  id               String            @id @default(cuid())
+  groupId          String
+  group            WhatsAppGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fileName         String?
+  importedMessages Int               @default(0)
+  skippedMessages  Int               @default(0)
+  createdAt        DateTime          @default(now())
+  messages         WhatsAppMessage[]
+
+  @@index([createdAt])
+}
+
+model WhatsAppConnectionState {
+  id                Int                      @id @default(1)
+  status            WhatsAppConnectionStatus @default(NOT_CONFIGURED)
+  accountExternalId String?
+  displayName       String?
+  lastConnectedAt   DateTime?
+  lastEventAt       DateTime?
+  lastError         String?
+  updatedAt         DateTime                 @updatedAt
+}
+
+model WhatsAppAuthState {
+  key        String   @id
+  ciphertext Bytes    @db.ByteA
+  iv         Bytes    @db.ByteA
+  authTag    Bytes    @db.ByteA
+  updatedAt  DateTime @updatedAt
 }

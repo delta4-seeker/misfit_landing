@@ -59,3 +59,12 @@ export type GalleryItem = {
   thumbnailUrl: string | null;
   caption: string | null;
 };
+
+export type TestimonialSummary = {
+  id: string;
+  quote: string;
+  name: string;
+  role: string;
+  company: string;
+  photoUrl: string | null;
+};

@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 
 import { directDatabaseUrl } from "../src/lib/database-url";
+import { demoTestimonials } from "../src/lib/demo";
 
 const prisma = new PrismaClient({ datasourceUrl: directDatabaseUrl() });
 
@@ -162,6 +163,67 @@ const previewGallery = [
   ["founder-dinner", "/demo/production/gallery/founder-dinner.jpg", "Production preview · Founder dinner"],
   ["feedback-circle", "/demo/production/gallery/feedback-circle.jpg", "Production preview · Feedback circle"],
   ["community-space", "/demo/production/gallery/community-space.jpg", "Production preview · Community space"],
+] as const;
+
+const previewBlogs = [
+  {
+    slug: "the-unfair-advantage-of-building-from-nepal",
+    kicker: "Field notes · 01",
+    title: "The unfair advantage of building from Nepal",
+    excerpt: "Distance from the default can be a strategic advantage—if founders turn local constraint into speed, taste, and global clarity.",
+    authorName: "Misfit Founders Club",
+    tags: ["Founders", "Nepal", "Global ambition"],
+    publishedAt: new Date("2026-10-20T09:00:00+05:45"),
+    body: `Most startup advice is written from places where capital, talent, customers, and precedent already sit in the same room. Building from Nepal changes the equation. It also changes what becomes possible.
+
+## Constraint sharpens the product
+
+When distribution is difficult and budgets are real, weak assumptions do not survive for long. Founders learn to listen closely, ship deliberately, and earn every repeat user. That discipline travels well.
+
+The advantage is not scarcity itself. The advantage is the operating instinct it can create: smaller loops, clearer priorities, and less room for theatre.
+
+## Local context, global standard
+
+Being Nepal-rooted should make a company more specific, not smaller. The strongest products understand a real local problem deeply while meeting the quality bar of the best products anywhere.
+
+That combination is difficult to copy. Context becomes product insight. Resourcefulness becomes speed. A different vantage point becomes taste.
+
+> Build from where you understand the problem. Compete at the standard your customer can access from anywhere.
+
+## The work still has to travel
+
+An unfair advantage only matters when it compounds. That means writing clearly, building distribution early, meeting peers outside the familiar circle, and making the work legible to the world.
+
+Nepal is not the ceiling. It is the starting point—and, used well, a perspective few other teams possess.`,
+  },
+  {
+    slug: "what-founders-actually-need-from-community",
+    kicker: "Club notes · 02",
+    title: "What founders actually need from community",
+    excerpt: "The useful room is not the loudest one. It is the one where honesty arrives early and help turns into action.",
+    authorName: "Misfit Founders Club",
+    tags: ["Community", "Founder life", "Trust"],
+    publishedAt: new Date("2026-10-23T09:00:00+05:45"),
+    body: `Founders are surrounded by events, introductions, group chats, and advice. More access does not automatically create more progress. Often it creates more noise.
+
+## Trust before scale
+
+A useful founder community starts small enough for context to accumulate. People remember the last hard decision, the customer that almost left, and the role that still has not been filled. Advice gets better because it is attached to a real history.
+
+Trust also changes the questions. Instead of performing certainty, founders can show unfinished thinking. That is usually where the valuable conversation begins.
+
+## Help should have a next step
+
+Good intent is not enough. The most useful rooms turn generosity into something concrete: a candidate introduction, a customer call, a hard piece of feedback, or twenty focused minutes with someone who has faced the same decision.
+
+> The measure of community is not how connected everyone feels. It is what becomes possible because the room exists.
+
+## Protect the signal
+
+Every community eventually chooses between reach and relevance. Protecting the signal means saying no to vanity, keeping conversations honest, and letting contribution matter more than visibility.
+
+Founders do not need another audience. They need a room that helps them return to the work with more clarity than they arrived with.`,
+  },
 ] as const;
 
 const adversarialUsers = [
@@ -553,6 +615,23 @@ async function main() {
       where: { id: `preview-gallery-${id}` },
       create: { id: `preview-gallery-${id}`, imageUrl, caption, uploaderId: admin.id },
       update: { imageUrl, caption },
+    });
+  }
+
+  for (const blog of previewBlogs) {
+    const readingMinutes = Math.max(1, Math.ceil(blog.body.trim().split(/\s+/).length / 220));
+    await prisma.blogPost.upsert({
+      where: { slug: blog.slug },
+      create: { ...blog, tags: [...blog.tags], readingMinutes, status: "PUBLISHED" },
+      update: { ...blog, tags: [...blog.tags], readingMinutes, status: "PUBLISHED" },
+    });
+  }
+
+  for (const testimonial of demoTestimonials) {
+    await prisma.testimonial.upsert({
+      where: { id: testimonial.id },
+      create: testimonial,
+      update: {},
     });
   }
 

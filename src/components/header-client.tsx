@@ -30,6 +30,7 @@ export function HeaderClient({ authenticated, isAdmin, profileHref, profileImage
     ["/products", "Products"],
     ["/events", "Events"],
     ["/gallery", "Gallery"],
+    ["/blog", "Blog"],
   ] as const;
 
   return (

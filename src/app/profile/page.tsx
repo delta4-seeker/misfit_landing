@@ -50,7 +50,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         <label className="form-field">LinkedIn URL<input className="field-input" name="linkedinUrl" type="url" defaultValue={user.linkedinUrl || ""} placeholder="https://linkedin.com/in/you" /></label>
         <label className="form-field">Instagram handle<input className="field-input" name="instagramHandle" defaultValue={user.instagramHandle || ""} placeholder="yourhandle" /></label>
         {!completion.complete && <p className="profile-completion-note"><strong>Required before listing a product:</strong> {completion.missing.join(", ")}.</p>}
-        <div className="readonly-email"><span>Google email</span><strong>{user.email}</strong><small>This comes from Google and cannot be changed here.</small></div>
+        <label className="form-field full">Email<input className="field-input" type="email" value={user.email ?? ""} readOnly autoComplete="email" /></label>
         <div className="form-actions"><button className="btn btn-lime" type="submit">Save profile ↗</button></div>
       </form>
     </section>
