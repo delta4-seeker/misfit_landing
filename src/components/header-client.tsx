@@ -28,7 +28,6 @@ export function HeaderClient({ authenticated, isAdmin, profileHref, profileImage
 
   const links = [
     ["/products", "Products"],
-    ["/events", "Events"],
     ["/gallery", "Gallery"],
     ["/blog", "Blog"],
   ] as const;
@@ -56,6 +55,7 @@ export function HeaderClient({ authenticated, isAdmin, profileHref, profileImage
             onClick={() => setOpen(false)}
           >{label}</Link>
         ))}
+        <a href="https://luma.com/user/misfitfounders" target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>Events ↗</a>
       </nav>
       <div className="header-actions">
         {isAdmin && <Link className="admin-link" href="/admin">Admin</Link>}

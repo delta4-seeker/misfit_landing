@@ -73,5 +73,5 @@ function BlogBody({ value }: { value: string }) {
 }
 
 function formatDate(value: Date | null) {
-  return value ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(value) : "Draft";
+  return value ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)) : "Draft";
 }

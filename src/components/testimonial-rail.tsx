@@ -81,8 +81,7 @@ export function TestimonialRail({ testimonials }: { testimonials: TestimonialSum
     >
       <div className="section-head testimonial-heading">
         <div>
-          <p className="testimonial-eyebrow">From the room</p>
-          <h2 id="testimonials-title">Good company. Better momentum.</h2>
+          <h2 id="testimonials-title">Hear from the founders themselves.</h2>
         </div>
         <div className="testimonial-controls" aria-label="Scroll testimonials">
           <button type="button" onClick={() => move(-1)} aria-label="Previous testimonials">←</button>
@@ -91,14 +90,14 @@ export function TestimonialRail({ testimonials }: { testimonials: TestimonialSum
       </div>
       <div className="testimonial-rail" ref={railRef} tabIndex={0} aria-label="Testimonials, scroll horizontally">
         {Array.from({ length: looping ? LOOP_COPIES : 1 }, (_, copy) =>
-          testimonials.map((testimonial, index) => (
+          testimonials.map((testimonial) => (
             <article
-              className={`testimonial-card${index % 2 ? " testimonial-card-accent" : ""}`}
+              className="testimonial-card"
               key={`${copy}-${testimonial.id}`}
               aria-hidden={looping && copy !== 1}
             >
               <div className="testimonial-person">
-                {testimonial.photoUrl ? <Image src={testimonial.photoUrl} alt="" width={50} height={50} unoptimized /> : <span className="testimonial-initials" aria-hidden="true">{testimonial.name.slice(0, 1)}</span>}
+                {testimonial.photoUrl ? <Image src={testimonial.photoUrl} alt="" width={50} height={50} sizes="50px" /> : <span className="testimonial-initials" aria-hidden="true">{testimonial.name.slice(0, 1)}</span>}
                 <div><strong>{testimonial.name}</strong><span>{testimonial.role} · {testimonial.company}</span></div>
               </div>
               <blockquote><span className="testimonial-mark" aria-hidden="true">“</span><p>{testimonial.quote}</p></blockquote>

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
@@ -54,6 +54,7 @@ export async function toggleProductVote(slug: string) {
   } else {
     await prisma.productVote.create({ data: { productId: product.id, userId: user.id } });
   }
+  updateTag("products");
   revalidatePath(`/products/${slug}`);
   revalidatePath("/products");
   revalidatePath("/");
@@ -72,6 +73,7 @@ export async function createProductComment(slug: string, formData: FormData) {
     redirect(`/products/${slug}?commentError=Too+many+comments.+Please+try+again+later.#comments`);
   }
   await prisma.productComment.create({ data: { productId: product.id, authorId: user.id, body: parsed.data } });
+  updateTag("products");
   revalidatePath(`/products/${slug}`);
   revalidatePath("/products");
   redirect(`/products/${slug}?commentPosted=1#comments`);
@@ -83,6 +85,7 @@ export async function deleteProductComment(slug: string, commentId: string) {
   if (!comment || comment.product.slug !== slug) throw new Error("Comment not found.");
   if (comment.authorId !== user.id && !user.isAdmin) throw new Error("Forbidden");
   await prisma.productComment.delete({ where: { id: commentId } });
+  updateTag("products");
   revalidatePath(`/products/${slug}`);
   revalidatePath("/products");
   redirect(`/products/${slug}#comments`);
@@ -145,6 +148,8 @@ export async function saveProfile(formData: FormData) {
   if (uploaded && currentUser.profilePicture && currentUser.profilePicture !== uploaded) {
     await deleteStoredImage(currentUser.profilePicture);
   }
+  updateTag("products");
+  updateTag("founders");
   revalidatePath("/", "layout");
   if (!completion.complete) redirect("/profile?saved=1");
   redirect(`/founders/${founderSlug(user.fullName || user.name || "founder", user.id)}`);
@@ -211,6 +216,7 @@ export async function createProduct(formData: FormData) {
     const expiresAt = new Date(Date.now() + 14 * 86_400_000);
     await prisma.coFounderInvite.createMany({ data: validEmails.map((email) => ({ productId: product.id, email, expiresAt })) });
   }
+  updateTag("products");
   revalidatePath("/products");
   redirect(`/products/${product.slug}`);
 }
@@ -251,6 +257,7 @@ export async function updateProduct(slug: string, formData: FormData) {
   if (logoUrl && existingProduct.logoUrl && existingProduct.logoUrl !== logoUrl) {
     await deleteStoredImage(existingProduct.logoUrl);
   }
+  updateTag("products");
   revalidatePath(`/products/${slug}`);
   revalidatePath("/products");
   redirect(`/products/${slug}`);
@@ -261,6 +268,7 @@ export async function deleteProduct(slug: string) {
   const product = await ownedProduct(slug, member.id);
   await prisma.product.delete({ where: { slug } });
   await deleteStoredImage(product.logoUrl);
+  updateTag("products");
   revalidatePath("/products");
   redirect("/products");
 }
@@ -291,6 +299,7 @@ export async function revokeCofounderInvite(slug: string, inviteId: string) {
     prisma.coFounderInvite.update({ where: { id: invite.id }, data: { status: "REVOKED" } }),
     ...(invite.acceptedUserId ? [prisma.product.update({ where: { id: product.id }, data: { coFounders: { disconnect: { id: invite.acceptedUserId } } } })] : []),
   ]);
+  updateTag("products");
   redirect(`/products/${slug}/manage`);
 }
 
@@ -305,6 +314,7 @@ export async function acceptCofounderInvite(token: string) {
     prisma.coFounderInvite.update({ where: { id: invite.id }, data: { status: "ACCEPTED", acceptedUserId: member.id } }),
     prisma.product.update({ where: { id: invite.productId }, data: { coFounders: { connect: { id: member.id } } } }),
   ]);
+  updateTag("products");
   revalidatePath(`/products/${invite.product.slug}`);
   redirect(`/products/${invite.product.slug}`);
 }
@@ -330,6 +340,8 @@ export async function adminUpdateUser(formData: FormData) {
   if (target.id === actor.id && status !== "ACTIVE") throw new Error("You cannot suspend or ban your own account.");
   await prisma.user.update({ where: { id }, data: { status } });
   await audit(actor.id, "UPDATE_USER_STATUS", "User", id, { status });
+  updateTag("products");
+  updateTag("founders");
   revalidatePath("/admin");
 }
 
@@ -343,6 +355,7 @@ export async function adminUpdateProduct(formData: FormData) {
   const featuredOrder = z.coerce.number().int().min(0).max(9999).parse(formData.get("featuredOrder") || 0);
   await prisma.product.update({ where: { id }, data: { status, exclusive, featured, featuredOrder } });
   await audit(actor.id, "UPDATE_PRODUCT", "Product", id, { status, exclusive, featured });
+  updateTag("products");
   revalidatePath("/", "layout");
 }
 
@@ -352,6 +365,7 @@ export async function adminCreateCategory(formData: FormData) {
   const sortOrder = z.coerce.number().int().min(0).max(9999).parse(formData.get("sortOrder") || 0);
   const category = await prisma.category.create({ data: { name, slug: slugify(name), sortOrder } });
   await audit(actor.id, "CREATE_CATEGORY", "Category", category.id, { name });
+  updateTag("categories");
   revalidatePath("/admin");
 }
 
@@ -389,6 +403,7 @@ export async function adminCreateEvent(formData: FormData) {
     throw error;
   });
   await audit(actor.id, "CREATE_EVENT", "Event", event.id, { title: details.title });
+  updateTag("events");
   revalidatePath("/events");
 }
 
@@ -452,6 +467,7 @@ export async function adminSaveBlog(formData: FormData) {
   }
   if (coverImageUrl && existing?.coverImageUrl && existing.coverImageUrl !== coverImageUrl) await deleteStoredImage(existing.coverImageUrl);
   await audit(actor.id, existing ? "UPDATE_BLOG" : "CREATE_BLOG", "BlogPost", post.id, { title: post.title, status: post.status });
+  updateTag("blogs");
   revalidatePath("/blog");
   revalidatePath(`/blog/${post.slug}`);
   revalidatePath("/admin");
@@ -504,6 +520,7 @@ export async function adminSaveTestimonial(formData: FormData) {
   }
   if (photoUrl && existing?.photoUrl && existing.photoUrl !== photoUrl) await deleteStoredImage(existing.photoUrl);
   await audit(actor.id, existing ? "UPDATE_TESTIMONIAL" : "CREATE_TESTIMONIAL", "Testimonial", testimonial.id, { name: testimonial.name, active: testimonial.active });
+  updateTag("testimonials");
   revalidatePath("/");
   revalidatePath("/admin");
   redirect("/admin?view=testimonials&saved=1");
@@ -521,6 +538,7 @@ export async function adminAddGalleryPhoto(formData: FormData) {
       throw error;
     });
   await audit(actor.id, "ADD_GALLERY_PHOTO", "GalleryPhoto", photo.id);
+  updateTag("gallery");
   revalidatePath("/gallery");
 }
 
@@ -555,6 +573,13 @@ export async function adminDelete(kind: "product" | "event" | "photo" | "subscri
   }
   await Promise.all(mediaUrls.map((url) => deleteStoredImage(url)));
   await audit(actor.id, `DELETE_${safeKind.toUpperCase()}`, safeKind, id);
+  if (["product", "comment", "user"].includes(safeKind)) updateTag("products");
+  if (safeKind === "user") updateTag("founders");
+  if (safeKind === "event") updateTag("events");
+  if (safeKind === "photo") updateTag("gallery");
+  if (safeKind === "blog") updateTag("blogs");
+  if (safeKind === "testimonial") updateTag("testimonials");
+  if (safeKind === "category") updateTag("categories");
   revalidatePath("/", "layout");
 }
 
@@ -584,6 +609,7 @@ export async function adminSaveSettings(formData: FormData) {
     },
   });
   await audit(actor.id, "UPDATE_SETTINGS", "SiteSettings", "1");
+  updateTag("settings");
   revalidatePath("/", "layout");
 }
 

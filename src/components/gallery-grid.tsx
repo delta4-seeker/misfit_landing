@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { GalleryItem } from "@/lib/types";
 import { useState } from "react";
 
@@ -11,8 +12,7 @@ export function GalleryGrid({ photos, preview = false }: { photos: GalleryItem[]
         {photos.map((photo) => (
           <figure key={photo.id} className="gallery-item">
             <button type="button" onClick={() => setActive(photo)} aria-label={`Open ${photo.caption || "gallery photo"}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photo.thumbnailUrl || photo.imageUrl} alt={photo.caption || "Misfit Founders Club gathering"} loading="lazy" />
+              <Image src={photo.thumbnailUrl || photo.imageUrl} alt={photo.caption || "Misfit Founders Club gathering"} width={640} height={680} sizes={preview ? "(max-width: 760px) 75vw, 25vw" : "(max-width: 760px) 45vw, (max-width: 1100px) 28vw, 20vw"} quality={75} />
             </button>
           </figure>
         ))}

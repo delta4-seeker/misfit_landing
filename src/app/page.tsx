@@ -1,17 +1,16 @@
 import Link from "next/link";
 
-import { EventRow } from "@/components/event-row";
 import { GalleryGrid } from "@/components/gallery-grid";
 import { ProductCard } from "@/components/product-card";
 import { TestimonialRail } from "@/components/testimonial-rail";
 import { subscribeNewsletter } from "@/app/actions";
-import { getFeaturedProducts, getGallery, getNextEvent, getTestimonials } from "@/lib/data";
+import { getFeaturedProducts, getGallery, getTestimonials } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [products, event, photos, testimonials] = await Promise.all([
-    getFeaturedProducts(), getNextEvent(), getGallery(6), getTestimonials(),
+  const [products, photos, testimonials] = await Promise.all([
+    getFeaturedProducts(), getGallery(6), getTestimonials(),
   ]);
   return (
     <>
@@ -45,13 +44,6 @@ export default async function HomePage() {
       )}
 
       {testimonials.length > 0 && <TestimonialRail testimonials={testimonials} />}
-
-      {event && (
-        <section className="home-events section-shell">
-          <div className="section-head"><h2>What’s coming next.</h2></div>
-          <EventRow event={event} />
-        </section>
-      )}
 
       {photos.length > 0 && (
         <section className="gallery-preview section-shell">

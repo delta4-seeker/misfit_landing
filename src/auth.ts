@@ -1,4 +1,5 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
+import type { User as DatabaseUser } from "@prisma/client";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
@@ -39,14 +40,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return !existing || existing.status === "ACTIVE";
     },
     async session({ session, user }) {
-      const appUser = await prisma.user.findUnique({ where: { id: user.id } });
+      // The database-session adapter has already loaded this user for the request.
+      const appUser = user as DatabaseUser;
       session.user.id = user.id;
-      session.user.fullName = appUser?.fullName;
-      session.user.profilePicture = appUser?.profilePicture || appUser?.image;
-      session.user.profileCompleted = appUser ? profileCompletion(appUser).complete : false;
-      session.user.status = appUser?.status ?? "ACTIVE";
-      session.user.isAdmin = appUser?.isAdmin ?? false;
-      session.user.isSuperAdmin = appUser?.isSuperAdmin ?? false;
+      session.user.fullName = appUser.fullName;
+      session.user.profilePicture = appUser.profilePicture || appUser.image;
+      session.user.profileCompleted = profileCompletion(appUser).complete;
+      session.user.status = appUser.status;
+      session.user.isAdmin = appUser.isAdmin;
+      session.user.isSuperAdmin = appUser.isSuperAdmin;
       return session;
     },
   },

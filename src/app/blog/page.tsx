@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import Image from "next/image";
 
 import { Pagination } from "@/components/pagination";
 import { getPublishedBlogsPage } from "@/lib/blog";
@@ -62,8 +63,7 @@ export default async function BlogPage({ searchParams }: { searchParams: Promise
 
 function BlogVisual({ image, title }: { image: string | null; title: string }) {
   return <div className="blog-visual">{image ? <>
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={image} alt="" />
+    <Image src={image} alt="" width={960} height={640} sizes="(max-width: 760px) 90vw, 50vw" />
   </> : <span>{title.slice(0, 1)}</span>}</div>;
 }
 
@@ -76,5 +76,5 @@ function BlogMeta({ post }: { post: { authorName: string; publishedAt: Date | nu
 }
 
 function formatDate(value: Date | null) {
-  return value ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(value) : "Draft";
+  return value ? new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(new Date(value)) : "Draft";
 }

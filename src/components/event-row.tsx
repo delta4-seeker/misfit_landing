@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { EventSummary } from "@/lib/types";
 import { useEffect, useState } from "react";
 
@@ -15,9 +16,13 @@ function remaining(date: Date) {
 export function EventRow({ event }: { event: EventSummary }) {
   const [countdown, setCountdown] = useState<ReturnType<typeof remaining> | null>(null);
   useEffect(() => {
-    setCountdown(remaining(event.startsAt));
-    const timer = window.setInterval(() => setCountdown(remaining(event.startsAt)), 60_000);
-    return () => window.clearInterval(timer);
+    const update = () => setCountdown(remaining(event.startsAt));
+    const initial = window.setTimeout(update, 0);
+    const timer = window.setInterval(update, 60_000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
   }, [event.startsAt]);
 
   const date = new Date(event.startsAt);
@@ -25,8 +30,7 @@ export function EventRow({ event }: { event: EventSummary }) {
     <article className="event-row">
       <a className="event-art" href={event.lumaUrl} target="_blank" rel="noreferrer" aria-label={`Register for ${event.title}`}>
         {event.coverImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={event.coverImageUrl} alt="" />
+          <Image src={event.coverImageUrl} alt="" width={960} height={640} sizes="(max-width: 760px) 90vw, 40vw" />
         ) : <span className="event-mark">M</span>}
         <strong>{new Intl.DateTimeFormat("en", { day: "2-digit", month: "short" }).format(date)}</strong>
       </a>

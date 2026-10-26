@@ -40,7 +40,7 @@ export default async function ProductPage({
         </div>
         <div className="product-detail-copy">
           <div className="product-card-meta"><span className="tag">{product.category.name}</span></div>
-          <h1>{product.name}</h1>
+          <h1><a className="product-name-link" href={product.websiteUrl} target="_blank" rel="noopener noreferrer" aria-label={`${product.name} website (opens in a new tab)`}>{product.name}</a></h1>
           <p className="lead">{product.tagline}</p>
           <p>{product.description}</p>
           <div className="product-signal-row">
@@ -55,7 +55,7 @@ export default async function ProductPage({
             <strong>{engagement.upvoteCount} {engagement.upvoteCount === 1 ? "upvote" : "upvotes"}</strong>
             <span>{engagement.comments.length} {engagement.comments.length === 1 ? "comment" : "comments"}</span>
           </div>
-          <div className="button-row left"><a className="btn btn-lime" href={product.websiteUrl} target="_blank" rel="noreferrer">Visit product ↗</a>{session?.user.id === product.founder.id && <Link className="btn btn-outline" href={`/products/${product.slug}/manage`}>Manage listing</Link>}</div>
+          {session?.user.id === product.founder.id && <div className="button-row left"><Link className="btn btn-outline" href={`/products/${product.slug}/manage`}>Manage listing</Link></div>}
         </div>
       </div>
       <section className="product-founders" id="founders" aria-labelledby="product-founders-title">

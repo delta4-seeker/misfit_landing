@@ -1,16 +1,15 @@
 import "server-only";
 
 import type { Prisma } from "@prisma/client";
-import { unstable_noStore as noStore } from "next/cache";
+import { unstable_cache } from "next/cache";
 
 import { pageBounds } from "@/lib/pagination";
 import { prisma } from "@/lib/prisma";
 import type { EventSummary, FounderSummary, GalleryItem, ProductEngagement, ProductSummary, TestimonialSummary } from "@/lib/types";
 import { displayName, founderSlug, profileImage } from "@/lib/utils";
 
-async function fromDatabase<T>(query: () => Promise<T>): Promise<T> {
-  noStore();
-  return query();
+async function fromDatabase<T>(key: string[], tags: string[], query: () => Promise<T>): Promise<T> {
+  return unstable_cache(query, key, { tags, revalidate: 300 })();
 }
 
 type ProductWithRelations = Awaited<ReturnType<typeof loadProductsFromDatabase>>[number];
@@ -74,15 +73,15 @@ function mapProduct(product: ProductWithRelations): ProductSummary {
 }
 
 export async function getCategories() {
-  return fromDatabase(() => prisma.category.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }));
+  return fromDatabase(["categories"], ["categories"], () => prisma.category.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }));
 }
 
 export async function getProducts(category?: string) {
-  return fromDatabase(async () => (await loadProductsFromDatabase(category)).map(mapProduct));
+  return fromDatabase(["products", category || "all"], ["products"], async () => (await loadProductsFromDatabase(category)).map(mapProduct));
 }
 
 export async function getProductsPage(category: string | undefined, requestedPage: number, pageSize = 6) {
-  return fromDatabase(async () => {
+  return fromDatabase(["products-page", category || "all", String(requestedPage), String(pageSize)], ["products"], async () => {
     const totalCount = await prisma.product.count({ where: liveProductWhere(category) });
     const bounds = pageBounds(totalCount, requestedPage, pageSize);
     const products = await loadProductsFromDatabase(category, false, { skip: bounds.skip, take: pageSize });
@@ -91,11 +90,11 @@ export async function getProductsPage(category: string | undefined, requestedPag
 }
 
 export async function getFeaturedProducts() {
-  return fromDatabase(async () => (await loadProductsFromDatabase(undefined, true)).map(mapProduct));
+  return fromDatabase(["featured-products"], ["products"], async () => (await loadProductsFromDatabase(undefined, true)).map(mapProduct));
 }
 
 export async function getProduct(slug: string) {
-  return fromDatabase(async () => {
+  return fromDatabase(["product", slug], ["products"], async () => {
     const product = await prisma.product.findFirst({
       where: { slug, status: "LIVE", owner: { status: "ACTIVE" } },
       include: {
@@ -110,8 +109,7 @@ export async function getProduct(slug: string) {
 }
 
 export async function getProductEngagement(productId: string, viewerId?: string): Promise<ProductEngagement> {
-  return fromDatabase(async () => {
-    const [upvoteCount, viewerVote, comments] = await Promise.all([
+  const [upvoteCount, viewerVote, comments] = await Promise.all([
       prisma.productVote.count({ where: { productId } }),
       viewerId
         ? prisma.productVote.findUnique({ where: { productId_userId: { productId, userId: viewerId } }, select: { userId: true } })
@@ -122,11 +120,11 @@ export async function getProductEngagement(productId: string, viewerId?: string)
         orderBy: { createdAt: "desc" },
         take: 100,
       }),
-    ]);
-    return {
-      upvoteCount,
-      viewerHasUpvoted: Boolean(viewerVote),
-      comments: comments.map((comment) => ({
+  ]);
+  return {
+    upvoteCount,
+    viewerHasUpvoted: Boolean(viewerVote),
+    comments: comments.map((comment) => ({
         id: comment.id,
         body: comment.body,
         createdAt: comment.createdAt,
@@ -135,9 +133,8 @@ export async function getProductEngagement(productId: string, viewerId?: string)
           name: displayName(comment.author),
           image: profileImage(comment.author),
         },
-      })),
-    };
-  });
+    })),
+  };
 }
 
 function mapEvent(event: {
@@ -165,11 +162,11 @@ function mapEvent(event: {
 }
 
 export async function getEvents() {
-  return fromDatabase(async () => (await prisma.event.findMany({ orderBy: { startsAt: "asc" } })).map(mapEvent));
+  return fromDatabase(["events"], ["events"], async () => (await prisma.event.findMany({ orderBy: { startsAt: "asc" } })).map(mapEvent));
 }
 
 export async function getEventsPage(requestedPage: number, pageSize = 4) {
-  return fromDatabase(async () => {
+  return fromDatabase(["events-page", String(requestedPage), String(pageSize)], ["events"], async () => {
     const now = new Date();
     const [upcomingCount, pastCount] = await Promise.all([
       prisma.event.count({ where: { startsAt: { gte: now } } }),
@@ -195,7 +192,7 @@ export async function getEventsPage(requestedPage: number, pageSize = 4) {
 }
 
 export async function getNextEvent() {
-  return fromDatabase(async () => {
+  return fromDatabase(["next-event"], ["events"], async () => {
     const event = await prisma.event.findFirst({
       where: { startsAt: { gte: new Date() } },
       orderBy: { startsAt: "asc" },
@@ -205,7 +202,7 @@ export async function getNextEvent() {
 }
 
 export async function getGallery(limit?: number) {
-  return fromDatabase(async () => {
+  return fromDatabase(["gallery", String(limit ?? "all")], ["gallery"], async () => {
     const photos = await prisma.galleryPhoto.findMany({
       orderBy: { createdAt: "desc" },
       ...(limit ? { take: limit } : {}),
@@ -220,7 +217,7 @@ export async function getGallery(limit?: number) {
 }
 
 export async function getGalleryPage(requestedPage: number, pageSize = 6) {
-  return fromDatabase(async () => {
+  return fromDatabase(["gallery-page", String(requestedPage), String(pageSize)], ["gallery"], async () => {
     const totalCount = await prisma.galleryPhoto.count();
     const bounds = pageBounds(totalCount, requestedPage, pageSize);
     const photos = await prisma.galleryPhoto.findMany({
@@ -237,7 +234,7 @@ export async function getGalleryPage(requestedPage: number, pageSize = 6) {
 }
 
 export async function getTestimonials(): Promise<TestimonialSummary[]> {
-  return fromDatabase(
+  return fromDatabase(["testimonials"], ["testimonials"],
     () => prisma.testimonial.findMany({
       where: { active: true },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -247,7 +244,7 @@ export async function getTestimonials(): Promise<TestimonialSummary[]> {
 }
 
 export async function getFounder(slug: string) {
-  return fromDatabase(async () => {
+  return fromDatabase(["founder", slug], ["products", "founders"], async () => {
     const idSuffix = slug.split("-").at(-1) || "";
     const user = await prisma.user.findFirst({
       where: { id: { endsWith: idSuffix }, status: "ACTIVE" },
@@ -281,5 +278,5 @@ export async function getFounder(slug: string) {
 }
 
 export async function getSiteSettings() {
-  return fromDatabase(() => prisma.siteSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} }));
+  return fromDatabase(["site-settings"], ["settings"], () => prisma.siteSettings.findUnique({ where: { id: 1 } }));
 }
