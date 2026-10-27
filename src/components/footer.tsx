@@ -1,8 +1,11 @@
 import Link from "next/link";
+import { connection } from "next/server";
 
 import { getSiteSettings } from "@/lib/data";
 
 export async function Footer() {
+  // Site settings are request-time data. Static pages must build without querying production.
+  await connection();
   const settings = await getSiteSettings();
   const { instagramUrl, linkedinUrl } = settings ?? {};
   return (
