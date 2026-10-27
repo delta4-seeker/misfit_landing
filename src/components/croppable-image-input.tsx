@@ -43,7 +43,7 @@ export function CroppableImageInput({ name, label, required, kind, existingUrl, 
   const [saving, setSaving] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const size = stageSize(aspect, dimensions.width || 1, dimensions.height || 1);
-  const uploadLabel = kind === "logo" ? `${label} (white background recommended)` : label;
+  const logoHint = kind === "logo" ? <span className="logo-upload-hint"> (transparent PNG recommended)</span> : null;
 
   useEffect(() => {
     if (!selected) return;
@@ -147,14 +147,14 @@ export function CroppableImageInput({ name, label, required, kind, existingUrl, 
         <img src={preview || displayUrl || existingUrl} alt="" />
         <span>{preparing ? "Opening photo…" : "Crop photo"}</span>
       </button>
-      {allowReplacement ? <><label htmlFor={`${name}-upload`}>Replace {uploadLabel.toLowerCase()}</label><input ref={inputRef} id={`${name}-upload`} className="field-input" name={name} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
+      {allowReplacement ? <><label htmlFor={`${name}-upload`}>Replace {label.toLowerCase()}{logoHint}</label><input ref={inputRef} id={`${name}-upload`} className="field-input" name={name} type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => {
         const file = event.target.files?.[0];
         if (!file) return;
         committedRef.current = null; setPreview(null); setAspect("original"); setZoom(1); setOffset({ x: 0, y: 0 }); setDimensions({ width: 0, height: 0 }); setError(""); setSelected(file);
       }} /></> : <input ref={inputRef} name={name} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" tabIndex={-1} aria-hidden="true" />}
       {preview && (saveCropSeparately ? <SubmitButton className="btn btn-lime btn-small" pendingLabel="Saving crop…">Save crop</SubmitButton> : <span className="crop-ready">Crop ready. Save changes to apply it.</span>)}
     </> : <>
-      <label htmlFor={`${name}-upload`}>{uploadLabel}</label>
+      <label htmlFor={`${name}-upload`}>{label}{logoHint}</label>
       <input ref={inputRef} id={`${name}-upload`} className="field-input" name={name} type="file" accept="image/jpeg,image/png,image/webp" required={required} onChange={(event) => {
         const file = event.target.files?.[0];
         if (!file) return;
