@@ -254,8 +254,6 @@ button[aria-busy="true"] { opacity: .75; cursor: wait; }
 .route-loading-spinner { width: 24px; height: 24px; }
 .header-placeholder { min-height: 68px; }
 .crop-field { min-width: 0; }
-.logo-upload-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 2px 0 0; color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: 0; }
-.logo-upload-note strong { flex: none; padding: 4px 8px; border-radius: 99px; background: var(--lime); color: var(--ink); font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
 .crop-result { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
 .crop-result img { width: 64px; height: 52px; border-radius: 8px; object-fit: contain; background: #f4f4f1; }
 .crop-result .text-button { padding: 4px; color: var(--ink); text-decoration: underline; }
