@@ -1,4 +1,4 @@
-# Misfit Founders Club
+# Misfit Founder Club
 
 The portal runs on Next.js App Router, Auth.js, Prisma, and Supabase Postgres. It includes the public club site, product directory, founder profiles, direct-to-Luma events, gallery, newsletter capture, Google login, profile completion, product submission, and a role-gated club dashboard.
 
