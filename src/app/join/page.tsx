@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { googleSignIn } from "@/app/actions";
+import { SubmitButton } from "@/components/submit-button";
 
 export const metadata: Metadata = { title: "Join Club" };
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export default async function JoinPage({
             Supabase is not connected yet. Add DATABASE_URL and DIRECT_URL to .env.local, then restart the app.
           </p>
         )}
-        <form action={googleSignIn}><button className="google-button" type="submit"><span className="google-g">G</span>Continue with Google <b>↗</b></button></form>
+        <form action={googleSignIn}><SubmitButton className="google-button" pendingLabel="Connecting to Google…"><span className="google-g">G</span>Continue with Google <b>↗</b></SubmitButton></form>
         <small>By continuing, you agree to the <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</small>
       </div>
     </section>

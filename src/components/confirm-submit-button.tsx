@@ -1,5 +1,7 @@
 "use client";
 
+import { useFormStatus } from "react-dom";
+
 type Props = {
   children: React.ReactNode;
   message: string;
@@ -9,17 +11,18 @@ type Props = {
 };
 
 export function ConfirmSubmitButton({ children, message, className, disabled, formAction }: Props) {
+  const { pending } = useFormStatus();
   return (
     <button
       className={className}
-      disabled={disabled}
+      disabled={disabled || pending}
       formAction={formAction}
       onClick={(event) => {
         if (!window.confirm(message)) event.preventDefault();
       }}
       type="submit"
     >
-      {children}
+      {pending ? <><span className="button-spinner" aria-hidden="true" />Working…</> : children}
     </button>
   );
 }

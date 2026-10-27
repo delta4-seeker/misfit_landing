@@ -138,7 +138,6 @@ model Product {
   logoUrl         String?
   foundedMonth    Int?
   foundedYear     Int?
-  builtInNepal    Boolean           @default(true)
   exclusive       Boolean           @default(false)
   featured        Boolean           @default(false)
   featuredOrder   Int               @default(0)
@@ -214,7 +213,6 @@ model GalleryPhoto {
   id           String   @id @default(cuid())
   imageUrl     String
   thumbnailUrl String?
-  caption      String?
   uploaderId   String?
   uploader     User?    @relation(fields: [uploaderId], references: [id], onDelete: SetNull)
   createdAt    DateTime @default(now())

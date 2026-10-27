@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { createProduct } from "@/app/actions";
+import { CroppableImageInput } from "@/components/croppable-image-input";
+import { SubmitButton } from "@/components/submit-button";
 import { getCategories } from "@/lib/data";
 import { incompleteProfileMessage, profileCompletion } from "@/lib/profile";
 import { prisma } from "@/lib/prisma";
@@ -33,12 +35,11 @@ export default async function NewProductPage({ searchParams }: { searchParams: P
         <label className="form-field full">Co-founder emails<textarea className="field-input" name="cofounderEmails" rows={2} placeholder="name@example.com, another@example.com" /><small>Optional. We’ll create private invitation links you can share.</small></label>
         <label className="form-field">LinkedIn URL<input className="field-input" name="linkedinUrl" type="url" placeholder="https://linkedin.com/company/..." /></label>
         <label className="form-field">Instagram handle<input className="field-input" name="instagramHandle" placeholder="yourproduct" /></label>
-        <label className="form-field">Founder type<input className="field-input" name="founderType" placeholder="Solo founder, co-founders…" /></label>
-        <label className="form-field">Logo<input className="field-input" name="logo" type="file" accept="image/jpeg,image/png,image/webp" /><small>Square, at least 256px · max 2 MB</small></label>
+        <label className="form-field">Founder type<select className="field-input" name="founderType" defaultValue=""><option value="">Choose one</option><option value="Solo founder">Solo founder</option><option value="Co-founders">Co-founders</option><option value="Founding team">Founding team</option></select></label>
+        <CroppableImageInput name="logo" label="Logo" kind="logo" />
         <label className="form-field">Founded month<input className="field-input" name="foundedMonth" type="number" min="1" max="12" /></label>
         <label className="form-field">Founded year<input className="field-input" name="foundedYear" type="number" min="1900" max={new Date().getFullYear()} /></label>
-        <label className="form-field-check"><input type="checkbox" name="builtInNepal" defaultChecked /> Built in Nepal</label>
-        <div className="form-actions"><button className="btn btn-lime" type="submit">Publish product ↗</button></div>
+        <div className="form-actions"><SubmitButton className="btn btn-lime" pendingLabel="Publishing…">Publish product ↗</SubmitButton></div>
       </form>
     </section>
   );

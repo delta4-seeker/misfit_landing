@@ -20,7 +20,7 @@ Open `http://localhost:3000`. Public pages render representative demo content wh
 
 All secrets remain in `.env.local` locally and in the deployment provider's encrypted environment settings in production. Do not commit either file.
 
-- `DATABASE_URL`: Supabase transaction-pooler URI on port 6543 for the deployed serverless app. Add `pgbouncer=true&connection_limit=1`.
+- `DATABASE_URL`: Supabase transaction-pooler URI on port 6543 for the deployed serverless app. Add `pgbouncer=true&connection_limit=5&pool_timeout=30` so concurrent page and image requests do not queue behind one connection.
 - `DIRECT_URL`: Supabase session-pooler URI on port 5432 for Prisma migrations, seeds, and imports.
 - `SUPABASE_PROJECT_REF`, `SUPABASE_POOLER_HOST`, and `SUPABASE_DB_PASSWORD`: fallback settings that build a port 6543 transaction-pooler URL for app traffic and a port 5432 session-pooler URL for migrations when full URLs have not been added yet.
 - `AUTH_SECRET`: a random session secret; generate one with `openssl rand -base64 32`.

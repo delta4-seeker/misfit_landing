@@ -9,7 +9,7 @@ function validId(id: string) {
 
 function mediaHeaders(asset: { contentType: string; size: number; checksum: string }) {
   return new Headers({
-    "Cache-Control": "public, max-age=31536000, immutable",
+    "Cache-Control": "public, max-age=31536000, s-maxage=31536000, immutable",
     "Content-Length": String(asset.size),
     "Content-Type": asset.contentType,
     ETag: `"${asset.checksum}"`,

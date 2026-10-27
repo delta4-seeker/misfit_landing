@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
+import sharp from "sharp";
 
 import { prisma } from "@/lib/prisma";
 
@@ -38,6 +39,27 @@ export async function uploadImage(file: File, folder: string, maxMb: number) {
     },
   });
   return `/media/${asset.id}`;
+}
+
+export async function uploadGalleryThumbnail(bytes: Buffer) {
+  const thumbnail = await sharp(bytes, { limitInputPixels: 40_000_000 })
+    .autoOrient()
+    .resize({ width: 900, height: 900, fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 72, effort: 4 })
+    .toBuffer();
+  return uploadImage(new File([new Uint8Array(thumbnail)], "gallery-thumbnail.webp", { type: "image/webp" }), "gallery/thumbnails", 2);
+}
+
+export async function uploadGalleryImages(file: File) {
+  const bytes = Buffer.from(await file.arrayBuffer());
+  const imageUrl = await uploadImage(file, "gallery", 8);
+  try {
+    const thumbnailUrl = await uploadGalleryThumbnail(bytes);
+    return { imageUrl, thumbnailUrl };
+  } catch (error) {
+    await deleteStoredImage(imageUrl);
+    throw error;
+  }
 }
 
 export function mediaAssetId(imageUrl: string | null | undefined) {

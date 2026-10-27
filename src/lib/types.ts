@@ -16,7 +16,6 @@ export type ProductSummary = {
   websiteUrl: string;
   logoUrl: string | null;
   category: { name: string; slug: string };
-  builtInNepal: boolean;
   founder: FounderSummary;
   coFounders: FounderSummary[];
   featured?: boolean;
@@ -57,7 +56,6 @@ export type GalleryItem = {
   id: string;
   imageUrl: string;
   thumbnailUrl: string | null;
-  caption: string | null;
 };
 
 export type TestimonialSummary = {

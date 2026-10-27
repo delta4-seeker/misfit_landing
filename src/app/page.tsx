@@ -3,6 +3,7 @@ import Link from "next/link";
 import { GalleryGrid } from "@/components/gallery-grid";
 import { ProductCard } from "@/components/product-card";
 import { TestimonialRail } from "@/components/testimonial-rail";
+import { SubmitButton } from "@/components/submit-button";
 import { subscribeNewsletter } from "@/app/actions";
 import { getFeaturedProducts, getGallery, getTestimonials } from "@/lib/data";
 
@@ -58,7 +59,7 @@ export default async function HomePage() {
           <label className="sr-only" htmlFor="newsletter-email">Email address</label>
           <input id="newsletter-email" name="email" type="email" placeholder="you@example.com" required />
           <input className="hp-field" name="website" tabIndex={-1} autoComplete="off" />
-          <button className="btn btn-dark" type="submit">Subscribe ↗</button>
+          <SubmitButton className="btn btn-dark" pendingLabel="Subscribing…">Subscribe ↗</SubmitButton>
         </form>
       </section>
     </>

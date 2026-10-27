@@ -158,11 +158,11 @@ const previewEvents = [
 ] as const;
 
 const previewGallery = [
-  ["build-night", "/demo/production/gallery/build-night.jpg", "Production preview · Build night"],
-  ["working-session", "/demo/production/gallery/working-session.jpg", "Production preview · Working session"],
-  ["founder-dinner", "/demo/production/gallery/founder-dinner.jpg", "Production preview · Founder dinner"],
-  ["feedback-circle", "/demo/production/gallery/feedback-circle.jpg", "Production preview · Feedback circle"],
-  ["community-space", "/demo/production/gallery/community-space.jpg", "Production preview · Community space"],
+  ["build-night", "/demo/production/gallery/build-night.jpg"],
+  ["working-session", "/demo/production/gallery/working-session.jpg"],
+  ["founder-dinner", "/demo/production/gallery/founder-dinner.jpg"],
+  ["feedback-circle", "/demo/production/gallery/feedback-circle.jpg"],
+  ["community-space", "/demo/production/gallery/community-space.jpg"],
 ] as const;
 
 const previewBlogs = [
@@ -345,7 +345,6 @@ async function seedAdversarialData(categoryBySlug: Map<string, { id: string }>, 
       logoUrl: null,
       foundedMonth: 2,
       foundedYear: 2026,
-      builtInNepal: true,
       exclusive: true,
       featured: true,
       featuredOrder: 90,
@@ -361,7 +360,6 @@ async function seedAdversarialData(categoryBySlug: Map<string, { id: string }>, 
       tagline: "A production-like listing with Unicode, a long title, no logo, and multiple founder profiles.",
       description: "This intentionally demanding listing checks placeholder artwork, long copy, Unicode नेपाली text, ampersands, punctuation, co-founder layouts, comments, upvotes, and responsive card truncation without relying on fake lorem ipsum.",
       logoUrl: null,
-      builtInNepal: true,
       exclusive: true,
       featured: true,
       featuredOrder: 90,
@@ -381,9 +379,8 @@ async function seedAdversarialData(categoryBySlug: Map<string, { id: string }>, 
       tagline: "Minimum valid content.",
       description: "A draft record used to verify admin visibility and public filtering.",
       status: "DRAFT",
-      builtInNepal: false,
     },
-    update: { ownerId: placeholder.id, categoryId: saas.id, status: "DRAFT", builtInNepal: false },
+    update: { ownerId: placeholder.id, categoryId: saas.id, status: "DRAFT" },
   });
 
   await prisma.product.upsert({
@@ -477,15 +474,15 @@ async function seedAdversarialData(categoryBySlug: Map<string, { id: string }>, 
   }
 
   const testGallery = [
-    { id: "test-gallery-no-caption", imageUrl: "/demo/production/gallery/community-space.jpg", caption: null },
-    { id: "test-gallery-long-caption", imageUrl: "/demo/production/gallery/feedback-circle.jpg", caption: "TEST · A deliberately long gallery caption with नेपाली Unicode, punctuation — and <markup-like text> to verify wrapping, escaping, and the complete 180-character boundary without breaking the layout.".slice(0, 180) },
-    { id: "test-gallery-portrait-fallback", imageUrl: "/demo/production/people/prashant-soni.webp", caption: "TEST · Portrait image crop" },
+    { id: "test-gallery-no-caption", imageUrl: "/demo/production/gallery/community-space.jpg" },
+    { id: "test-gallery-long-caption", imageUrl: "/demo/production/gallery/feedback-circle.jpg" },
+    { id: "test-gallery-portrait-fallback", imageUrl: "/demo/production/people/prashant-soni.webp" },
   ];
   for (const photo of testGallery) {
     await prisma.galleryPhoto.upsert({
       where: { id: photo.id },
       create: { ...photo, uploaderId: adminId },
-      update: { imageUrl: photo.imageUrl, caption: photo.caption, uploaderId: adminId },
+      update: { imageUrl: photo.imageUrl, uploaderId: adminId },
     });
   }
 
@@ -565,7 +562,6 @@ async function main() {
         tagline: product.tagline,
         description: product.description,
         logoUrl: product.logoUrl,
-        builtInNepal: true,
         exclusive: index < 4,
         featured: index < 4,
         featuredOrder: index,
@@ -581,7 +577,6 @@ async function main() {
         tagline: product.tagline,
         description: product.description,
         logoUrl: product.logoUrl,
-        builtInNepal: true,
         exclusive: index < 4,
         featured: index < 4,
         featuredOrder: index,
@@ -610,11 +605,11 @@ async function main() {
   }
 
   await prisma.galleryPhoto.deleteMany({ where: { id: { startsWith: "seed-gallery-" } } });
-  for (const [id, imageUrl, caption] of previewGallery) {
+  for (const [id, imageUrl] of previewGallery) {
     await prisma.galleryPhoto.upsert({
       where: { id: `preview-gallery-${id}` },
-      create: { id: `preview-gallery-${id}`, imageUrl, caption, uploaderId: admin.id },
-      update: { imageUrl, caption },
+      create: { id: `preview-gallery-${id}`, imageUrl, uploaderId: admin.id },
+      update: { imageUrl },
     });
   }
 

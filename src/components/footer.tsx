@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { connection } from "next/server";
 
 import { getSiteSettings } from "@/lib/data";
 
 export async function Footer() {
-  await connection();
   const settings = await getSiteSettings();
   const { instagramUrl, linkedinUrl } = settings ?? {};
   return (

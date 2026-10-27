@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { logOut, saveProfile } from "@/app/actions";
 import { ProfileAvatar } from "@/components/profile-avatar";
+import { SubmitButton } from "@/components/submit-button";
 import { profileCompletion } from "@/lib/profile";
 import { prisma } from "@/lib/prisma";
 
@@ -51,7 +52,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
         <label className="form-field">Instagram handle<input className="field-input" name="instagramHandle" defaultValue={user.instagramHandle || ""} placeholder="yourhandle" /></label>
         {!completion.complete && <p className="profile-completion-note"><strong>Required before listing a product:</strong> {completion.missing.join(", ")}.</p>}
         <label className="form-field full">Email<input className="field-input" type="email" value={user.email ?? ""} readOnly autoComplete="email" /></label>
-        <div className="form-actions"><button className="btn btn-lime" type="submit">Save profile ↗</button></div>
+        <div className="form-actions"><SubmitButton className="btn btn-lime" pendingLabel="Saving…">Save profile ↗</SubmitButton></div>
       </form>
     </section>
   );

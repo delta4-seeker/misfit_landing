@@ -4,11 +4,13 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import {
-  adminAddGalleryPhoto, adminCreateCategory, adminCreateEvent, adminDelete, adminGrantAccess, adminRevokeAccess, adminSaveBlog, adminSaveTestimonial,
+  adminAddGalleryPhoto, adminReplaceGalleryPhoto, adminCreateCategory, adminCreateEvent, adminDelete, adminGrantAccess, adminRevokeAccess, adminSaveBlog, adminSaveTestimonial,
   adminDeleteWhatsAppImport, adminImportWhatsAppExport, adminLinkWhatsAppMember, adminSaveSettings, adminUpdateProduct, adminUpdateUser,
 } from "@/app/actions";
 import { auth } from "@/auth";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { CroppableImageInput } from "@/components/croppable-image-input";
+import { SubmitButton } from "@/components/submit-button";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "Club admin" };
@@ -39,7 +41,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         {view === "invitations" && <AdminInvitations />}
         {view === "categories" && <AdminCategories />}
         {view === "events" && <AdminEvents />}
-        {view === "gallery" && <AdminGallery />}
+        {view === "gallery" && <AdminGallery search={search} />}
         {view === "newsletter" && <AdminNewsletter />}
         {view === "settings" && <AdminSettings />}
         {view === "admins" && session.user.isSuperAdmin && <AdminAdmins />}
@@ -168,11 +170,10 @@ async function AdminBlogs({ search }: { search: AdminSearch }) {
       <label className="form-field">Kicker (optional)<input className="field-input" name="kicker" defaultValue={editing?.kicker || ""} maxLength={80} placeholder="Field notes · 01" /></label>
       <label className="form-field">Author name<input className="field-input" name="authorName" defaultValue={editing?.authorName || ""} required minLength={2} maxLength={100} /></label>
       <label className="form-field full">Excerpt<textarea className="field-input" name="excerpt" defaultValue={editing?.excerpt || ""} required minLength={20} maxLength={320} rows={3} /></label>
-      <label className="form-field full">Cover image (optional, JPG, PNG, or WebP up to 6 MB)<input className="field-input" name="coverImage" type="file" accept="image/jpeg,image/png,image/webp" /></label>
-      {editing?.coverImageUrl && <div className="blog-admin-cover"><Image src={editing.coverImageUrl} alt={`Cover for ${editing.title}`} width={150} height={96} unoptimized /><span>Current cover · upload a new image to replace it.</span></div>}
+      <CroppableImageInput name="coverImage" label="Cover image" kind="gallery" existingUrl={editing?.coverImageUrl || undefined} allowReplacement saveCropSeparately={false} compact="cover" />
       <label className="form-field full">Article body<textarea className="field-input blog-admin-body" name="body" defaultValue={editing?.body || ""} required minLength={100} maxLength={50000} rows={16} /><small>Separate paragraphs with a blank line. Use ## for headings, &gt; for quotes, and - for list items.</small></label>
       <label className="blog-publish-field"><input name="published" type="checkbox" defaultChecked={editing?.status === "PUBLISHED"} /> Publish on the public blog</label>
-      <div className="blog-admin-actions"><button className="btn btn-lime" type="submit">{editing ? "Save article" : "Create article"}</button>{editing && <Link className="btn btn-outline" href="/admin?view=blogs">Cancel edit</Link>}</div>
+      <div className="blog-admin-actions"><SubmitButton className="btn btn-lime" pendingLabel="Saving article…">{editing ? "Save article" : "Create article"}</SubmitButton>{editing && <Link className="btn btn-outline" href="/admin?view=blogs">Cancel edit</Link>}</div>
     </form>
     <div className="admin-list">{posts.length ? posts.map((post) => <article className="admin-row blog-admin-row" key={post.id}>
       <div><strong>{post.title}</strong><small>{post.authorName} · {post.status === "PUBLISHED" ? "Published" : "Draft"} · Updated {formatAdminDate(post.updatedAt)}</small><p>{post.excerpt}</p></div>
@@ -197,10 +198,9 @@ async function AdminTestimonials({ search }: { search: AdminSearch }) {
       <label className="form-field">Role<input className="field-input" name="role" defaultValue={editing?.role || ""} required maxLength={160} /></label>
       <label className="form-field">Display order<input className="field-input" name="sortOrder" type="number" min="0" max="10000" defaultValue={editing?.sortOrder ?? testimonials.length + 1} required /></label>
       <label className="form-field full">Message<textarea className="field-input" name="quote" defaultValue={editing?.quote || ""} required minLength={40} maxLength={2000} rows={5} /></label>
-      <label className="form-field full">Photo (JPG, PNG, or WebP, up to 5 MB)<input className="field-input" name="photo" type="file" accept="image/jpeg,image/png,image/webp" required={!editing?.photoUrl} /></label>
-      {editing?.photoUrl && <div className="testimonial-admin-photo"><Image src={editing.photoUrl} alt={`Current photo for ${editing.name}`} width={54} height={54} unoptimized /><span>Current photo · upload a new one to replace it.</span></div>}
+      <CroppableImageInput name="photo" label="Photo" kind="gallery" existingUrl={editing?.photoUrl || undefined} allowReplacement saveCropSeparately={false} compact="avatar" required={!editing?.photoUrl} />
       <label className="testimonial-active-field"><input name="active" type="checkbox" defaultChecked={editing?.active ?? true} /> Show on homepage</label>
-      <div className="testimonial-admin-actions"><button className="btn btn-lime" type="submit">{editing ? "Save testimonial" : "Add testimonial"}</button>{editing && <Link className="btn btn-outline" href="/admin?view=testimonials">Cancel edit</Link>}</div>
+      <div className="testimonial-admin-actions"><SubmitButton className="btn btn-lime" pendingLabel="Saving testimonial…">{editing ? "Save testimonial" : "Add testimonial"}</SubmitButton>{editing && <Link className="btn btn-outline" href="/admin?view=testimonials">Cancel edit</Link>}</div>
     </form>
     <div className="admin-list">{testimonials.map((testimonial) => <article className="admin-row testimonial-admin-row" key={testimonial.id}>
       <div className="testimonial-admin-person">{testimonial.photoUrl ? <Image src={testimonial.photoUrl} alt="" width={54} height={54} unoptimized /> : <span>{initials(testimonial.name)}</span>}<div><strong>{testimonial.name} {testimonial.id.startsWith("preview-") && <span className="tag admin-test-tag">Sample</span>}</strong><small>{testimonial.role} · {testimonial.company || "Company not set"} · Order {testimonial.sortOrder} · {testimonial.active ? "Visible" : "Hidden"}</small><p>{testimonial.quote}</p></div></div>
@@ -210,12 +210,11 @@ async function AdminTestimonials({ search }: { search: AdminSearch }) {
   </>;
 }
 
-async function AdminGallery() {
+async function AdminGallery({ search }: { search: AdminSearch }) {
   const photos = await prisma.galleryPhoto.findMany({ orderBy: { createdAt: "desc" } });
-  return <><AdminTitle title="Gallery." subtitle="Keep the camera roll human and current." /><form className="admin-card inline-form" action={adminAddGalleryPhoto}><input className="field-input" name="image" type="file" accept="image/jpeg,image/png,image/webp" required /><input className="field-input" name="caption" placeholder="Caption" maxLength={180} /><button className="btn btn-lime" type="submit">Add photo</button></form><div className="admin-gallery-grid">{photos.map((photo) => <figure key={photo.id}>
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img src={photo.thumbnailUrl || photo.imageUrl} alt="" />
-    <figcaption><span>{photo.caption || "Untitled"} {photo.id.startsWith("test-") && <span className="tag admin-test-tag">Test data</span>}</span><form action={adminDelete.bind(null, "photo", photo.id)}><ConfirmSubmitButton className="text-button danger-button" message="Delete this gallery photo?">Delete</ConfirmSubmitButton></form></figcaption>
+  return <><AdminTitle title="Gallery." subtitle="Click an existing photo to crop it, or add a new one." />{search.error && <p className="admin-notice admin-notice-error" role="alert">{search.error}</p>}{search.saved && <p className="admin-notice" role="status">Gallery photo saved.</p>}<form className="admin-card inline-form" action={adminAddGalleryPhoto}><CroppableImageInput name="image" label="Photo" kind="gallery" required /><SubmitButton className="btn btn-lime" pendingLabel="Uploading…">Add photo</SubmitButton></form><div className="admin-gallery-grid">{photos.map((photo, index) => <figure key={photo.id}>
+    <form action={adminReplaceGalleryPhoto.bind(null, photo.id)}><CroppableImageInput name="image" label={`Crop gallery photo ${index + 1}`} kind="gallery" existingUrl={photo.imageUrl} displayUrl={photo.thumbnailUrl || photo.imageUrl} /></form>
+    <div className="admin-gallery-actions"><span>{photo.id.startsWith("test-") && <span className="tag admin-test-tag">Test data</span>}</span><form action={adminDelete.bind(null, "photo", photo.id)}><ConfirmSubmitButton className="text-button danger-button" message="Delete this gallery photo?">Delete</ConfirmSubmitButton></form></div>
   </figure>)}</div></>;
 }
 
@@ -226,7 +225,7 @@ async function AdminNewsletter() {
 
 async function AdminSettings() {
   const settings = await prisma.siteSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
-  return <><AdminTitle title="Site settings." subtitle="Links shared across the public experience." /><form className="panel-form" action={adminSaveSettings}><label className="form-field full">Application form URL<input className="field-input" name="applyFormUrl" type="url" defaultValue={settings.applyFormUrl || ""} /></label><label className="form-field">Instagram URL<input className="field-input" name="instagramUrl" type="url" defaultValue={settings.instagramUrl || ""} /></label><label className="form-field">LinkedIn URL<input className="field-input" name="linkedinUrl" type="url" defaultValue={settings.linkedinUrl || ""} /></label><label className="form-field full">Contact email<input className="field-input" name="contactEmail" type="email" defaultValue={settings.contactEmail || ""} /></label><button className="btn btn-lime" type="submit">Save settings</button></form></>;
+  return <><AdminTitle title="Site settings." subtitle="Links shared across the public experience." /><form className="panel-form" action={adminSaveSettings}><label className="form-field full">Application form URL<input className="field-input" name="applyFormUrl" type="url" defaultValue={settings.applyFormUrl || ""} /></label><label className="form-field">Instagram URL<input className="field-input" name="instagramUrl" type="url" defaultValue={settings.instagramUrl || ""} /></label><label className="form-field">LinkedIn URL<input className="field-input" name="linkedinUrl" type="url" defaultValue={settings.linkedinUrl || ""} /></label><label className="form-field full">Contact email<input className="field-input" name="contactEmail" type="email" defaultValue={settings.contactEmail || ""} /></label><SubmitButton className="btn btn-lime" pendingLabel="Saving…">Save settings</SubmitButton></form></>;
 }
 
 async function AdminAdmins() {

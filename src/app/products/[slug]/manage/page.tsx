@@ -4,6 +4,8 @@ import { notFound, redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { deleteProduct, inviteCofounder, revokeCofounderInvite, updateProduct } from "@/app/actions";
+import { CroppableImageInput } from "@/components/croppable-image-input";
+import { SubmitButton } from "@/components/submit-button";
 import { getCategories } from "@/lib/data";
 import { prisma } from "@/lib/prisma";
 import { absoluteUrl } from "@/lib/utils";
@@ -37,12 +39,11 @@ export default async function ManageProductPage({ params, searchParams }: { para
           <label className="form-field full">Description<textarea className="field-input" name="description" required maxLength={300} rows={5} defaultValue={product.description} /></label>
           <label className="form-field">LinkedIn URL<input className="field-input" name="linkedinUrl" type="url" defaultValue={product.linkedinUrl || ""} /></label>
           <label className="form-field">Instagram handle<input className="field-input" name="instagramHandle" defaultValue={product.instagramHandle || ""} /></label>
-          <label className="form-field">Founder type<input className="field-input" name="founderType" defaultValue={product.founderType || ""} /></label>
-          <label className="form-field">Replace logo<input className="field-input" name="logo" type="file" accept="image/jpeg,image/png,image/webp" /></label>
+          <label className="form-field">Founder type<select className="field-input" name="founderType" defaultValue={product.founderType || ""}><option value="">Choose one</option>{product.founderType && !["Solo founder", "Co-founders", "Founding team"].includes(product.founderType) && <option value={product.founderType}>{product.founderType}</option>}<option value="Solo founder">Solo founder</option><option value="Co-founders">Co-founders</option><option value="Founding team">Founding team</option></select></label>
+          <CroppableImageInput name="logo" label="Logo" kind="logo" existingUrl={product.logoUrl || undefined} allowReplacement saveCropSeparately={false} compact="logo" />
           <label className="form-field">Founded month<input className="field-input" name="foundedMonth" type="number" min="1" max="12" defaultValue={product.foundedMonth || ""} /></label>
           <label className="form-field">Founded year<input className="field-input" name="foundedYear" type="number" min="1900" max={new Date().getFullYear()} defaultValue={product.foundedYear || ""} /></label>
-          <label className="form-field-check"><input type="checkbox" name="builtInNepal" defaultChecked={product.builtInNepal} /> Built in Nepal</label>
-          <div className="form-actions"><button className="btn btn-lime" type="submit">Save changes ↗</button></div>
+          <div className="form-actions"><SubmitButton className="btn btn-lime" pendingLabel="Saving…">Save changes ↗</SubmitButton></div>
         </form>
         <aside className="manage-side">
           <section className="admin-card"><h2>Co-founders</h2><form className="stack-form" action={inviteCofounder.bind(null, slug)}><label>Email<input className="field-input" type="email" name="email" required /></label><button className="btn btn-dark btn-small" type="submit">Create invite ↗</button></form>{product.invites.map((invite) => <article className="invite-row" key={invite.id}><div><strong>{invite.email}</strong><small>{invite.status.toLowerCase()} · expires {new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(invite.expiresAt)}</small>{invite.status === "PENDING" && <code>{absoluteUrl(`/invites/${invite.token}`)}</code>}</div>{invite.status !== "REVOKED" && <form action={revokeCofounderInvite.bind(null, slug, invite.id)}><button className="text-button" type="submit">Revoke</button></form>}</article>)}</section>

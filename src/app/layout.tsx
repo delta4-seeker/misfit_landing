@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import type { ReactNode } from "react";
+import { Suspense } from "react";
 
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
@@ -26,9 +28,9 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
     <html lang="en" data-scroll-behavior="smooth">
       <body>
         <a className="skip-link" href="#main">Skip to content</a>
-        <Header />
+        <Suspense fallback={<div className="site-header header-placeholder" aria-hidden="true"><span className="brand"><Image src="/img/misfit-mark.png" alt="" width={46} height={46} /><span>Misfit Founders Club</span></span></div>}><Header /></Suspense>
         <main id="main">{children}</main>
-        <Footer />
+        <Suspense fallback={null}><Footer /></Suspense>
       </body>
     </html>
   );

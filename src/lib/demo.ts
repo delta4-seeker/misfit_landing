@@ -102,7 +102,6 @@ export const demoProducts: ProductSummary[] = productData.map((product, index) =
   websiteUrl: product.websiteUrl,
   logoUrl: product.logoUrl,
   category: product.category,
-  builtInNepal: true,
   founder: demoFounderByKey.get(product.founderKeys[0])!,
   coFounders: product.founderKeys.slice(1).map((key) => demoFounderByKey.get(key)!),
   featured: index < 4,
@@ -147,16 +146,15 @@ export const demoEvents: EventSummary[] = [
 ];
 
 export const demoGallery: GalleryItem[] = [
-  ["build-night", "/demo/production/gallery/build-night.jpg", "Production preview · Build night"],
-  ["working-session", "/demo/production/gallery/working-session.jpg", "Production preview · Working session"],
-  ["founder-dinner", "/demo/production/gallery/founder-dinner.jpg", "Production preview · Founder dinner"],
-  ["feedback-circle", "/demo/production/gallery/feedback-circle.jpg", "Production preview · Feedback circle"],
-  ["community-space", "/demo/production/gallery/community-space.jpg", "Production preview · Community space"],
-].map(([id, imageUrl, caption]) => ({
+  ["build-night", "/demo/production/gallery/build-night.jpg"],
+  ["working-session", "/demo/production/gallery/working-session.jpg"],
+  ["founder-dinner", "/demo/production/gallery/founder-dinner.jpg"],
+  ["feedback-circle", "/demo/production/gallery/feedback-circle.jpg"],
+  ["community-space", "/demo/production/gallery/community-space.jpg"],
+].map(([id, imageUrl]) => ({
   id: `preview-photo-${id}`,
   imageUrl,
   thumbnailUrl: null,
-  caption,
 }));
 
 export const demoTestimonials: (TestimonialSummary & { sortOrder: number; active: boolean })[] = [

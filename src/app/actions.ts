@@ -10,7 +10,7 @@ import { databaseIsConfigured } from "@/lib/database-url";
 import { incompleteProfileMessage, profileCompletion } from "@/lib/profile";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
-import { deleteStoredImage, uploadImage } from "@/lib/storage";
+import { deleteStoredImage, uploadGalleryImages, uploadImage } from "@/lib/storage";
 import { founderSlug, slugify } from "@/lib/utils";
 import { instagramHandleSchema, secureExternalUrlSchema } from "@/lib/validation";
 import { parseWhatsAppExport } from "@/lib/whatsapp-import";
@@ -205,7 +205,6 @@ export async function createProduct(formData: FormData) {
       slug: duplicateCount ? `${baseSlug}-${duplicateCount + 1}` : baseSlug,
       ownerId: member.id,
       logoUrl,
-      builtInNepal: formData.get("builtInNepal") === "on",
       status: "LIVE",
     },
   });
@@ -251,7 +250,6 @@ export async function updateProduct(slug: string, formData: FormData) {
       instagramHandle: parsed.data.instagramHandle?.replace(/^@/, "") || null,
       founderType: parsed.data.founderType || null,
       ...(logoUrl ? { logoUrl } : {}),
-      builtInNepal: formData.get("builtInNepal") === "on",
     },
   });
   if (logoUrl && existingProduct.logoUrl && existingProduct.logoUrl !== logoUrl) {
@@ -529,17 +527,45 @@ export async function adminSaveTestimonial(formData: FormData) {
 export async function adminAddGalleryPhoto(formData: FormData) {
   const actor = await requireAdmin();
   const file = formData.get("image");
-  if (!(file instanceof File) || !file.size) throw new Error("Choose an image.");
-  const caption = z.string().trim().max(180).parse(formData.get("caption") || "");
-  const imageUrl = await uploadImage(file, "gallery", 8);
-  const photo = await prisma.galleryPhoto.create({ data: { imageUrl, caption: caption || null, uploaderId: actor.id } })
+  if (!(file instanceof File) || !file.size) redirect("/admin?view=gallery&error=Choose+an+image.");
+  let images: Awaited<ReturnType<typeof uploadGalleryImages>>;
+  try { images = await uploadGalleryImages(file); }
+  catch (error) { redirect(`/admin?view=gallery&error=${encodeURIComponent(error instanceof Error ? error.message : "Image upload failed.")}`); }
+  const photo = await prisma.galleryPhoto.create({ data: { ...images, uploaderId: actor.id } })
     .catch(async (error) => {
-      await deleteStoredImage(imageUrl);
+      await Promise.all([deleteStoredImage(images.imageUrl), deleteStoredImage(images.thumbnailUrl)]);
       throw error;
     });
   await audit(actor.id, "ADD_GALLERY_PHOTO", "GalleryPhoto", photo.id);
   updateTag("gallery");
+  revalidatePath("/");
   revalidatePath("/gallery");
+  revalidatePath("/admin");
+  redirect("/admin?view=gallery&saved=1");
+}
+
+export async function adminReplaceGalleryPhoto(photoId: string, formData: FormData) {
+  const actor = await requireAdmin();
+  const existing = await prisma.galleryPhoto.findUnique({ where: { id: photoId }, select: { imageUrl: true, thumbnailUrl: true } });
+  if (!existing) redirect("/admin?view=gallery&error=Gallery+photo+not+found.");
+  const file = formData.get("image");
+  if (!(file instanceof File) || !file.size) redirect("/admin?view=gallery&error=Choose+a+crop+before+saving.");
+  let images: Awaited<ReturnType<typeof uploadGalleryImages>>;
+  try { images = await uploadGalleryImages(file); }
+  catch (error) { redirect(`/admin?view=gallery&error=${encodeURIComponent(error instanceof Error ? error.message : "Image upload failed.")}`); }
+  try {
+    await prisma.galleryPhoto.update({ where: { id: photoId }, data: images });
+  } catch (error) {
+    await Promise.all([deleteStoredImage(images.imageUrl), deleteStoredImage(images.thumbnailUrl)]);
+    throw error;
+  }
+  await Promise.all([deleteStoredImage(existing.imageUrl), deleteStoredImage(existing.thumbnailUrl)]);
+  await audit(actor.id, "CROP_GALLERY_PHOTO", "GalleryPhoto", photoId);
+  updateTag("gallery");
+  revalidatePath("/");
+  revalidatePath("/gallery");
+  revalidatePath("/admin");
+  redirect("/admin?view=gallery&saved=1");
 }
 
 export async function adminDelete(kind: "product" | "event" | "photo" | "subscriber" | "category" | "comment" | "user" | "invitation" | "blog" | "testimonial", id: string) {
@@ -548,7 +574,10 @@ export async function adminDelete(kind: "product" | "event" | "photo" | "subscri
   const mediaUrls: Array<string | null | undefined> = [];
   if (safeKind === "product") mediaUrls.push((await prisma.product.findUnique({ where: { id }, select: { logoUrl: true } }))?.logoUrl);
   if (safeKind === "event") mediaUrls.push((await prisma.event.findUnique({ where: { id }, select: { coverImageUrl: true } }))?.coverImageUrl);
-  if (safeKind === "photo") mediaUrls.push((await prisma.galleryPhoto.findUnique({ where: { id }, select: { imageUrl: true } }))?.imageUrl);
+  if (safeKind === "photo") {
+    const photo = await prisma.galleryPhoto.findUnique({ where: { id }, select: { imageUrl: true, thumbnailUrl: true } });
+    mediaUrls.push(photo?.imageUrl, photo?.thumbnailUrl);
+  }
   if (safeKind === "blog") mediaUrls.push((await prisma.blogPost.findUnique({ where: { id }, select: { coverImageUrl: true } }))?.coverImageUrl);
   if (safeKind === "testimonial") mediaUrls.push((await prisma.testimonial.findUnique({ where: { id }, select: { photoUrl: true } }))?.photoUrl);
   if (safeKind === "product") await prisma.product.delete({ where: { id } });

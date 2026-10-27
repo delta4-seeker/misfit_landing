@@ -53,7 +53,7 @@ async function databaseControlCheck() {
       await tx.event.create({
         data: { id: runId, slug: runId, title: "Admin event check", startsAt: new Date(Date.now() + 86_400_000), venue: "Online", description: "A reversible event control check.", lumaUrl: "https://lu.ma/example" },
       });
-      await tx.galleryPhoto.create({ data: { id: runId, imageUrl: "/demo/production/gallery/build-night.jpg", caption: "Rollback-only photo" } });
+      await tx.galleryPhoto.create({ data: { id: runId, imageUrl: "/demo/production/gallery/build-night.jpg" } });
       await tx.newsletterSubscriber.create({ data: { id: runId, email: `${runId}@example.invalid`, unsubscribeToken: runId } });
       await tx.auditLog.create({ data: { id: runId, action: "ADMIN_CONTROL_CHECK", targetType: "Product", targetId: product.id } });
 

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { createProductComment, deleteProductComment, toggleProductVote } from "@/app/actions";
 import { auth } from "@/auth";
 import { ProfileAvatar } from "@/components/profile-avatar";
+import { SubmitButton } from "@/components/submit-button";
 import { getProduct, getProductEngagement } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -46,10 +47,10 @@ export default async function ProductPage({
           <div className="product-signal-row">
             {canInteract ? (
               <form action={toggleProductVote.bind(null, product.slug)}>
-                <button className={`vote-button ${engagement.viewerHasUpvoted ? "active" : ""}`} type="submit" aria-pressed={engagement.viewerHasUpvoted}>
+                <SubmitButton className={`vote-button ${engagement.viewerHasUpvoted ? "active" : ""}`} pendingLabel="Updating…" aria-pressed={engagement.viewerHasUpvoted}>
                   <span aria-hidden="true">▲</span>
                   {engagement.viewerHasUpvoted ? "Upvoted" : "Upvote"}
-                </button>
+                </SubmitButton>
               </form>
             ) : <Link className="vote-button" href={joinHref}><span aria-hidden="true">▲</span> Upvote</Link>}
             <strong>{engagement.upvoteCount} {engagement.upvoteCount === 1 ? "upvote" : "upvotes"}</strong>
@@ -84,7 +85,7 @@ export default async function ProductPage({
             <textarea id="comment-body" name="body" maxLength={500} minLength={2} rows={4} placeholder="Share a useful question or perspective about this product." required />
             {query.commentError && <p className="form-error" role="alert">{query.commentError}</p>}
             {query.commentPosted && <p className="success-note" role="status">Your feedback has been posted.</p>}
-            <button className="btn btn-dark" type="submit">Post feedback ↗</button>
+            <SubmitButton className="btn btn-dark" pendingLabel="Posting…">Post feedback ↗</SubmitButton>
           </form>
         ) : (
           <div className="comment-signin"><p>Join the club to upvote and join the conversation.</p><Link className="btn btn-lime" href={joinHref}>Join Club</Link></div>

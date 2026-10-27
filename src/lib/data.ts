@@ -63,7 +63,6 @@ function mapProduct(product: ProductWithRelations): ProductSummary {
     websiteUrl: product.websiteUrl,
     logoUrl: product.logoUrl,
     category: { name: product.category.name, slug: product.category.slug },
-    builtInNepal: product.builtInNepal,
     featured: product.featured,
     upvoteCount: product._count.votes,
     commentCount: product._count.comments,
@@ -211,7 +210,6 @@ export async function getGallery(limit?: number) {
       id: photo.id,
       imageUrl: photo.imageUrl,
       thumbnailUrl: photo.thumbnailUrl,
-      caption: photo.caption,
     }));
   });
 }
@@ -226,7 +224,7 @@ export async function getGalleryPage(requestedPage: number, pageSize = 6) {
       take: pageSize,
     });
     return {
-      photos: photos.map<GalleryItem>((photo) => ({ id: photo.id, imageUrl: photo.imageUrl, thumbnailUrl: photo.thumbnailUrl, caption: photo.caption })),
+      photos: photos.map<GalleryItem>((photo) => ({ id: photo.id, imageUrl: photo.imageUrl, thumbnailUrl: photo.thumbnailUrl })),
       page: bounds.page,
       totalPages: bounds.totalPages,
     };
