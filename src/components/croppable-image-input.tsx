@@ -139,7 +139,7 @@ export function CroppableImageInput({ name, label, required, kind, existingUrl, 
     }
   }
 
-  return <div className={`form-field crop-field${compact ? ` crop-field--${compact}` : ""}`}>
+  return <div className={`form-field crop-field${kind === "logo" ? " crop-field--logo-upload" : ""}${compact ? ` crop-field--${compact}` : ""}`}>
     {existingUrl ? <>
       <button className="admin-gallery-image-button" type="button" onClick={openExisting} disabled={preparing} aria-label={preparing ? "Opening photo for cropping" : label}>
         {/* Gallery thumbnails and local blob previews already have the correct size. */}
