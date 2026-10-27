@@ -160,6 +160,7 @@ export function CroppableImageInput({ name, label, required, kind, existingUrl, 
         setAspect("original"); setZoom(1); setOffset({ x: 0, y: 0 }); setDimensions({ width: 0, height: 0 }); setError(""); setSelected(file);
       }} />
     </>}
+    {kind === "logo" && <p className="logo-upload-note"><strong>Recommended</strong> Upload a logo with a white background for the cleanest display.</p>}
     {preview && !existingUrl && <div className="crop-result">
       {/* Blob URLs are generated locally and cannot use the Next image optimizer. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
