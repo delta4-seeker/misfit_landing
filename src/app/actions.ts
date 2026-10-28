@@ -8,6 +8,7 @@ import type { Prisma } from "@prisma/client";
 import { auth, signIn, signOut } from "@/auth";
 import { databaseIsConfigured } from "@/lib/database-url";
 import { incompleteProfileMessage, profileCompletion } from "@/lib/profile";
+import { normalizeLumaUrl, resolveLumaEvent } from "@/lib/luma";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { deleteStoredImage, uploadGalleryImages, uploadImage } from "@/lib/storage";
@@ -405,6 +406,32 @@ export async function adminCreateEvent(formData: FormData) {
   revalidatePath("/events");
 }
 
+export async function adminSaveHomepageLumaEvent(formData: FormData) {
+  const actor = await requireAdmin();
+  const input = String(formData.get("homepageLumaEventUrl") || "").trim();
+  let event: { url: string; eventId: string } | null = null;
+
+  if (input) {
+    try {
+      if (input.length > 500) throw new Error("The event link is too long.");
+      event = await resolveLumaEvent(input);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not load the Luma event.";
+      redirect(`/admin?view=events&error=${encodeURIComponent(message)}`);
+    }
+  }
+
+  await prisma.siteSettings.upsert({
+    where: { id: 1 },
+    create: { id: 1, homepageLumaEventUrl: event?.url ?? null, homepageLumaEventId: event?.eventId ?? null },
+    update: { homepageLumaEventUrl: event?.url ?? null, homepageLumaEventId: event?.eventId ?? null },
+  });
+  await audit(actor.id, "UPDATE_HOMEPAGE_LUMA_EVENT", "SiteSettings", "1", { url: event?.url ?? null });
+  updateTag("settings");
+  revalidatePath("/");
+  redirect("/admin?view=events&saved=1");
+}
+
 const blogSchema = z.object({
   title: z.string().trim().min(4).max(160),
   kicker: z.string().trim().max(80),
@@ -620,13 +647,16 @@ export async function adminSaveSettings(formData: FormData) {
     applyFormUrl: optionalUrl,
     instagramUrl: optionalUrl,
     linkedinUrl: optionalUrl,
+    lumaCalendarUrl: z.string().trim().min(1).max(500),
     contactEmail: optionalEmail,
   }).parse({
     applyFormUrl: String(formData.get("applyFormUrl") || "").trim(),
     instagramUrl: String(formData.get("instagramUrl") || "").trim(),
     linkedinUrl: String(formData.get("linkedinUrl") || "").trim(),
+    lumaCalendarUrl: String(formData.get("lumaCalendarUrl") || "").trim(),
     contactEmail: String(formData.get("contactEmail") || "").trim().toLowerCase(),
   });
+  const lumaCalendarUrl = normalizeLumaUrl(settings.lumaCalendarUrl);
   await prisma.siteSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {}, });
   await prisma.siteSettings.update({
     where: { id: 1 },
@@ -634,6 +664,7 @@ export async function adminSaveSettings(formData: FormData) {
       applyFormUrl: settings.applyFormUrl || null,
       instagramUrl: settings.instagramUrl || null,
       linkedinUrl: settings.linkedinUrl || null,
+      lumaCalendarUrl,
       contactEmail: settings.contactEmail || null,
     },
   });

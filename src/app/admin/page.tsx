@@ -5,13 +5,14 @@ import { notFound, redirect } from "next/navigation";
 
 import {
   adminAddGalleryPhoto, adminReplaceGalleryPhoto, adminCreateCategory, adminCreateEvent, adminDelete, adminGrantAccess, adminRevokeAccess, adminSaveBlog, adminSaveTestimonial,
-  adminDeleteWhatsAppImport, adminImportWhatsAppExport, adminLinkWhatsAppMember, adminSaveSettings, adminUpdateProduct, adminUpdateUser,
+  adminDeleteWhatsAppImport, adminImportWhatsAppExport, adminLinkWhatsAppMember, adminSaveHomepageLumaEvent, adminSaveSettings, adminUpdateProduct, adminUpdateUser,
 } from "@/app/actions";
 import { auth } from "@/auth";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { CroppableImageInput } from "@/components/croppable-image-input";
 import { SubmitButton } from "@/components/submit-button";
 import { prisma } from "@/lib/prisma";
+import { DEFAULT_LUMA_CALENDAR_URL } from "@/lib/luma";
 
 export const metadata: Metadata = { title: "Club admin" };
 export const dynamic = "force-dynamic";
@@ -40,7 +41,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         {view === "member-activity" && <AdminMemberActivity search={search} />}
         {view === "invitations" && <AdminInvitations />}
         {view === "categories" && <AdminCategories />}
-        {view === "events" && <AdminEvents />}
+        {view === "events" && <AdminEvents search={search} />}
         {view === "gallery" && <AdminGallery search={search} />}
         {view === "newsletter" && <AdminNewsletter />}
         {view === "settings" && <AdminSettings />}
@@ -152,9 +153,29 @@ async function AdminCategories() {
   return <><AdminTitle title="Categories." subtitle="Keep the product taxonomy useful." /><form className="admin-card inline-form" action={adminCreateCategory}><input className="field-input" name="name" placeholder="Category name" required /><input className="field-input number-input" name="sortOrder" type="number" defaultValue="0" /><button className="btn btn-lime" type="submit">Add category</button></form><div className="admin-list">{categories.map((category) => <div className="admin-row" key={category.id}><div><strong>{category.name}</strong><small>{category._count.products} products</small></div><span>{category.sortOrder}</span><form action={adminDelete.bind(null, "category", category.id)}><ConfirmSubmitButton className="text-button danger-button" disabled={category._count.products > 0} message={`Delete the ${category.name} category?`}>Delete</ConfirmSubmitButton></form></div>)}</div></>;
 }
 
-async function AdminEvents() {
-  const events = await prisma.event.findMany({ orderBy: { startsAt: "asc" } });
-  return <><AdminTitle title="Events." subtitle="Create a registration-first Luma listing." /><form className="panel-form admin-card" action={adminCreateEvent}><label className="form-field">Title<input className="field-input" name="title" required /></label><label className="form-field">Starts<input className="field-input" name="startsAt" type="datetime-local" required /></label><label className="form-field">Venue<input className="field-input" name="venue" required /></label><label className="form-field">Luma URL<input className="field-input" name="lumaUrl" type="url" required /></label><label className="form-field full">Description<textarea className="field-input" name="description" required rows={3} /></label><label className="form-field">Capacity<input className="field-input" name="capacity" type="number" min="0" /></label><label className="form-field">Price NPR<input className="field-input" name="priceNpr" type="number" min="0" step="0.01" /></label><label className="form-field full">Cover image<input className="field-input" name="coverImage" type="file" accept="image/jpeg,image/png,image/webp" /></label><button className="btn btn-lime" type="submit">Create event</button></form><div className="admin-list">{events.map((event) => <div className="admin-row" key={event.id}><div><strong>{event.title} {event.slug.startsWith("test-") && <span className="tag admin-test-tag">Test data</span>}</strong><small>{new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(event.startsAt)} · {event.venue}</small></div><a href={event.lumaUrl} target="_blank" rel="noreferrer">Registration ↗</a><form action={adminDelete.bind(null, "event", event.id)}><ConfirmSubmitButton className="text-button danger-button" message={`Delete ${event.title}?`}>Delete</ConfirmSubmitButton></form></div>)}</div></>;
+async function AdminEvents({ search }: { search: AdminSearch }) {
+  const [settings, events] = await Promise.all([
+    prisma.siteSettings.findUnique({ where: { id: 1 } }),
+    prisma.event.findMany({ orderBy: { startsAt: "asc" } }),
+  ]);
+  return <>
+    <AdminTitle title="Events." subtitle="Choose the Luma event featured on the homepage." />
+    {search.error && <p className="admin-notice admin-notice-error" role="alert">{search.error}</p>}
+    {search.saved && <p className="admin-notice" role="status">Homepage event updated.</p>}
+    <form className="panel-form admin-card" action={adminSaveHomepageLumaEvent}>
+      <label className="form-field full">Homepage Luma event link
+        <input className="field-input" name="homepageLumaEventUrl" type="url" placeholder="https://luma.com/your-event" defaultValue={settings?.homepageLumaEventUrl || ""} maxLength={500} />
+        <small>Paste the public event link and save. The event will appear above the homepage gallery. Clear the field and save to remove it.</small>
+      </label>
+      <SubmitButton className="btn btn-lime" pendingLabel="Checking Luma…">Save homepage event</SubmitButton>
+    </form>
+    <p className="admin-event-calendar-note">The Events links in the navigation and footer use the <Link href="/admin?view=settings">Luma calendar URL in Site settings</Link>.</p>
+    <details className="admin-legacy-events">
+      <summary>Manage older site event listings</summary>
+      <form className="panel-form admin-card" action={adminCreateEvent}><label className="form-field">Title<input className="field-input" name="title" required /></label><label className="form-field">Starts<input className="field-input" name="startsAt" type="datetime-local" required /></label><label className="form-field">Venue<input className="field-input" name="venue" required /></label><label className="form-field">Luma URL<input className="field-input" name="lumaUrl" type="url" required /></label><label className="form-field full">Description<textarea className="field-input" name="description" required rows={3} /></label><label className="form-field">Capacity<input className="field-input" name="capacity" type="number" min="0" /></label><label className="form-field">Price NPR<input className="field-input" name="priceNpr" type="number" min="0" step="0.01" /></label><label className="form-field full">Cover image<input className="field-input" name="coverImage" type="file" accept="image/jpeg,image/png,image/webp" /></label><SubmitButton className="btn btn-lime" pendingLabel="Creating…">Create event</SubmitButton></form>
+      <div className="admin-list">{events.map((event) => <div className="admin-row" key={event.id}><div><strong>{event.title} {event.slug.startsWith("test-") && <span className="tag admin-test-tag">Test data</span>}</strong><small>{new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(event.startsAt)} · {event.venue}</small></div><a href={event.lumaUrl} target="_blank" rel="noreferrer">Registration ↗</a><form action={adminDelete.bind(null, "event", event.id)}><ConfirmSubmitButton className="text-button danger-button" message={`Delete ${event.title}?`}>Delete</ConfirmSubmitButton></form></div>)}</div>
+    </details>
+  </>;
 }
 
 async function AdminBlogs({ search }: { search: AdminSearch }) {
@@ -225,7 +246,7 @@ async function AdminNewsletter() {
 
 async function AdminSettings() {
   const settings = await prisma.siteSettings.upsert({ where: { id: 1 }, create: { id: 1 }, update: {} });
-  return <><AdminTitle title="Site settings." subtitle="Links shared across the public experience." /><form className="panel-form" action={adminSaveSettings}><label className="form-field full">Application form URL<input className="field-input" name="applyFormUrl" type="url" defaultValue={settings.applyFormUrl || ""} /></label><label className="form-field">Instagram URL<input className="field-input" name="instagramUrl" type="url" defaultValue={settings.instagramUrl || ""} /></label><label className="form-field">LinkedIn URL<input className="field-input" name="linkedinUrl" type="url" defaultValue={settings.linkedinUrl || ""} /></label><label className="form-field full">Contact email<input className="field-input" name="contactEmail" type="email" defaultValue={settings.contactEmail || ""} /></label><SubmitButton className="btn btn-lime" pendingLabel="Saving…">Save settings</SubmitButton></form></>;
+  return <><AdminTitle title="Site settings." subtitle="Links shared across the public experience." /><form className="panel-form" action={adminSaveSettings}><label className="form-field full">Application form URL<input className="field-input" name="applyFormUrl" type="url" defaultValue={settings.applyFormUrl || ""} /></label><label className="form-field">Instagram URL<input className="field-input" name="instagramUrl" type="url" defaultValue={settings.instagramUrl || ""} /></label><label className="form-field">LinkedIn URL<input className="field-input" name="linkedinUrl" type="url" defaultValue={settings.linkedinUrl || ""} /></label><label className="form-field full">Luma calendar URL<input className="field-input" name="lumaCalendarUrl" type="url" defaultValue={settings.lumaCalendarUrl || DEFAULT_LUMA_CALENDAR_URL} required maxLength={500} /><small>Used by Events in the navigation and footer, and All events on the homepage.</small></label><label className="form-field full">Contact email<input className="field-input" name="contactEmail" type="email" defaultValue={settings.contactEmail || ""} /></label><SubmitButton className="btn btn-lime" pendingLabel="Saving…">Save settings</SubmitButton></form></>;
 }
 
 async function AdminAdmins() {

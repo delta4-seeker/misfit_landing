@@ -242,13 +242,16 @@ model NewsletterSubscriber {
 }
 
 model SiteSettings {
-  id                 Int      @id @default(1)
-  applyFormUrl       String?
-  instagramUrl       String?
-  linkedinUrl        String?
-  contactEmail       String?
-  galleryMaxUploadMb Int      @default(8)
-  updatedAt          DateTime @updatedAt
+  id                   Int      @id @default(1)
+  applyFormUrl         String?
+  instagramUrl         String?
+  linkedinUrl          String?
+  lumaCalendarUrl      String   @default("https://luma.com/user/misfitfounders")
+  homepageLumaEventUrl String?
+  homepageLumaEventId  String?
+  contactEmail         String?
+  galleryMaxUploadMb   Int      @default(8)
+  updatedAt            DateTime @updatedAt
 }
 
 model AuditLog {
