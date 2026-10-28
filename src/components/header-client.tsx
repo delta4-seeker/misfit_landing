@@ -12,9 +12,10 @@ type Props = {
   isAdmin: boolean;
   profileHref: string;
   profileImage: string | null;
+  lumaCalendarUrl: string;
 };
 
-export function HeaderClient({ authenticated, isAdmin, profileHref, profileImage }: Props) {
+export function HeaderClient({ authenticated, isAdmin, profileHref, profileImage, lumaCalendarUrl }: Props) {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
@@ -55,7 +56,7 @@ export function HeaderClient({ authenticated, isAdmin, profileHref, profileImage
             onClick={() => setOpen(false)}
           >{label}</Link>
         ))}
-        <a href="https://luma.com/user/misfitfounders" target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>Events ↗</a>
+        <a href={lumaCalendarUrl} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>Events ↗</a>
       </nav>
       <div className="header-actions">
         {isAdmin && <Link className="admin-link" href="/admin">Admin</Link>}

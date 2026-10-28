@@ -5,14 +5,21 @@ import { ProductRail } from "@/components/product-rail";
 import { TestimonialRail } from "@/components/testimonial-rail";
 import { SubmitButton } from "@/components/submit-button";
 import { subscribeNewsletter } from "@/app/actions";
-import { getGallery, getHomepageProducts, getTestimonials } from "@/lib/data";
+import { getGallery, getHomepageProducts, getSiteSettings, getTestimonials } from "@/lib/data";
+import { DEFAULT_LUMA_CALENDAR_URL } from "@/lib/luma";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [products, photos, testimonials] = await Promise.all([
-    getHomepageProducts(), getGallery(6), getTestimonials(),
+  const [products, photos, testimonials, settings] = await Promise.all([
+    getHomepageProducts(), getGallery(6), getTestimonials(), getSiteSettings(),
   ]);
+  const lumaEventId = settings?.homepageLumaEventId;
+  const lumaEventUrl = settings?.homepageLumaEventUrl;
+  const featuredEvent = lumaEventUrl && lumaEventId && /^evt-[A-Za-z0-9_-]+$/.test(lumaEventId)
+    ? { url: lumaEventUrl, id: lumaEventId }
+    : null;
+  const lumaCalendarUrl = settings?.lumaCalendarUrl || DEFAULT_LUMA_CALENDAR_URL;
   return (
     <>
       <section className="hero section-shell">
@@ -40,6 +47,22 @@ export default async function HomePage() {
       {products.length > 0 && <ProductRail products={products} />}
 
       {testimonials.length > 0 && <TestimonialRail testimonials={testimonials} />}
+
+      <section className="luma-event-section section-shell" id="upcoming-event" aria-labelledby="upcoming-event-title">
+        <div className="section-head">
+          <h2 id="upcoming-event-title">See you in the room.</h2>
+          <a className="text-link" href={lumaCalendarUrl} target="_blank" rel="noopener noreferrer">All events ↗</a>
+        </div>
+        {featuredEvent ? <>
+          <div className="luma-event-frame">
+            <iframe src={`https://luma.com/embed/event/${featuredEvent.id}/simple`} title="Upcoming Misfit Founders Club event on Luma" loading="lazy" referrerPolicy="strict-origin-when-cross-origin" />
+          </div>
+          <a className="btn btn-outline" href={featuredEvent.url} target="_blank" rel="noopener noreferrer">Full event details on Luma ↗</a>
+        </> : <div className="luma-event-empty">
+          <p>Our next gathering is on its way.</p>
+          <a className="btn btn-outline" href={lumaCalendarUrl} target="_blank" rel="noopener noreferrer">View the Luma calendar ↗</a>
+        </div>}
+      </section>
 
       {photos.length > 0 && (
         <section className="gallery-preview section-shell">
