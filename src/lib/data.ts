@@ -89,7 +89,7 @@ export async function getProductsPage(category: string | undefined, requestedPag
 }
 
 export async function getHomepageProducts() {
-  return fromDatabase(["homepage-products"], ["products"], async () => {
+  return fromDatabase(["homepage-products-unique"], ["products"], async () => {
     const picked = await prisma.$queryRaw<Array<{ id: string }>>`
       SELECT product.id
       FROM "Product" AS product
@@ -97,7 +97,7 @@ export async function getHomepageProducts() {
       WHERE product.status = ${"LIVE"}::"ListingStatus"
         AND owner.status = ${"ACTIVE"}::"UserStatus"
       ORDER BY random()
-      LIMIT 6
+      LIMIT 10
     `;
     if (!picked.length) return [];
 

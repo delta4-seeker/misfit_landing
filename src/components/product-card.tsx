@@ -4,10 +4,10 @@ import Image from "next/image";
 import type { ProductSummary } from "@/lib/types";
 import { truncate } from "@/lib/utils";
 
-export function ProductCard({ product, linkTabIndex }: { product: ProductSummary; linkTabIndex?: number }) {
+export function ProductCard({ product }: { product: ProductSummary }) {
   return (
     <article className="product-card">
-      <Link className="product-card-link" href={`/products/${product.slug}`} tabIndex={linkTabIndex}>
+      <Link className="product-card-link" href={`/products/${product.slug}`}>
         <div className="product-logo-wrap">
           {product.logoUrl ? (
             <Image src={product.logoUrl} alt={`${product.name} logo`} width={320} height={320} sizes="(max-width: 760px) 45vw, 25vw" />

@@ -70,14 +70,6 @@ export function TestimonialRail({ testimonials }: { testimonials: TestimonialSum
       className="testimonial-section section-shell"
       id="testimonials"
       aria-labelledby="testimonials-title"
-      onMouseEnter={() => { pausedRef.current = true; }}
-      onMouseLeave={() => { pausedRef.current = false; }}
-      onFocusCapture={() => { focusedRef.current = true; }}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) focusedRef.current = false;
-      }}
-      onPointerUpCapture={() => { focusedRef.current = false; }}
-      onTouchStart={() => { manualPauseUntilRef.current = performance.now() + 3000; }}
     >
       <div className="section-head testimonial-heading">
         <div>
@@ -88,13 +80,25 @@ export function TestimonialRail({ testimonials }: { testimonials: TestimonialSum
           <button type="button" onClick={() => move(1)} aria-label="Next testimonials">→</button>
         </div>
       </div>
-      <div className="testimonial-rail" ref={railRef} tabIndex={0} aria-label="Testimonials, scroll horizontally">
+      <div
+        className="testimonial-rail"
+        ref={railRef}
+        tabIndex={0}
+        aria-label="Testimonials, scroll horizontally"
+        onFocusCapture={() => { focusedRef.current = true; }}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) focusedRef.current = false;
+        }}
+        onTouchStart={() => { manualPauseUntilRef.current = performance.now() + 3000; }}
+      >
         {Array.from({ length: looping ? LOOP_COPIES : 1 }, (_, copy) =>
           testimonials.map((testimonial) => (
             <article
               className="testimonial-card"
               key={`${copy}-${testimonial.id}`}
               aria-hidden={looping && copy !== 1}
+              onMouseEnter={() => { pausedRef.current = true; }}
+              onMouseLeave={() => { pausedRef.current = false; }}
             >
               <div className="testimonial-person">
                 {testimonial.photoUrl ? <Image src={testimonial.photoUrl} alt="" width={50} height={50} sizes="50px" /> : <span className="testimonial-initials" aria-hidden="true">{testimonial.name.slice(0, 1)}</span>}

@@ -76,7 +76,7 @@ h1, h2, h3, h4, p { text-wrap: pretty; }
 .product-rail { display: flex; gap: 16px; overflow-x: auto; scrollbar-width: none; }
 .product-rail::-webkit-scrollbar { display: none; }
 .product-rail:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; }
-.product-rail-item { flex: 0 0 clamp(240px, 26vw, 340px); min-width: 0; }
+.product-rail-item { flex: 0 0 calc((100% - 48px) / 4); min-width: 0; }
 .product-rail-item .product-card, .product-rail-item .product-card-link { height: 100%; }
 .product-card-link { min-height: 100%; display: flex; flex-direction: column; overflow: hidden; padding: 0 0 24px; border-radius: var(--radius); background: #fff; box-shadow: 0 8px 28px rgba(17,17,17,.08); transition: transform .2s ease, box-shadow .2s ease; }
 .product-card-link:hover { transform: translateY(-6px); box-shadow: 0 16px 36px rgba(17,17,17,.14); }
@@ -503,6 +503,7 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; }
 }
 
 @media (max-width: 900px) {
+  .product-rail-item { flex-basis: calc((100% - 16px) / 2); }
   .think-different-card { grid-template-columns: 1fr; }
   .think-different-symbol { min-height: 180px; font-size: 240px; padding-top: 64px; }
   .think-different-copy { padding: 42px; }
