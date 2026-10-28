@@ -409,6 +409,7 @@ export async function adminCreateEvent(formData: FormData) {
 export async function adminSaveHomepageLumaEvent(formData: FormData) {
   const actor = await requireAdmin();
   const input = String(formData.get("homepageLumaEventUrl") || "").trim();
+  const visible = formData.get("homepageLumaEventVisible") === "on";
   let event: { url: string; eventId: string } | null = null;
 
   if (input) {
@@ -423,10 +424,19 @@ export async function adminSaveHomepageLumaEvent(formData: FormData) {
 
   await prisma.siteSettings.upsert({
     where: { id: 1 },
-    create: { id: 1, homepageLumaEventUrl: event?.url ?? null, homepageLumaEventId: event?.eventId ?? null },
-    update: { homepageLumaEventUrl: event?.url ?? null, homepageLumaEventId: event?.eventId ?? null },
+    create: {
+      id: 1,
+      homepageLumaEventUrl: event?.url ?? null,
+      homepageLumaEventId: event?.eventId ?? null,
+      homepageLumaEventVisible: visible,
+    },
+    update: {
+      homepageLumaEventUrl: event?.url ?? null,
+      homepageLumaEventId: event?.eventId ?? null,
+      homepageLumaEventVisible: visible,
+    },
   });
-  await audit(actor.id, "UPDATE_HOMEPAGE_LUMA_EVENT", "SiteSettings", "1", { url: event?.url ?? null });
+  await audit(actor.id, "UPDATE_HOMEPAGE_LUMA_EVENT", "SiteSettings", "1", { url: event?.url ?? null, visible });
   updateTag("settings");
   revalidatePath("/");
   redirect("/admin?view=events&saved=1");
