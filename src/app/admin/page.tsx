@@ -161,11 +161,21 @@ async function AdminEvents({ search }: { search: AdminSearch }) {
   return <>
     <AdminTitle title="Events." subtitle="Choose the Luma event featured on the homepage." />
     {search.error && <p className="admin-notice admin-notice-error" role="alert">{search.error}</p>}
-    {search.saved && <p className="admin-notice" role="status">Homepage event updated.</p>}
+    {search.saved && <p className="admin-notice" role="status">Homepage event settings updated.</p>}
     <form className="panel-form admin-card" action={adminSaveHomepageLumaEvent}>
+      <label className="admin-event-visibility">
+        <span className="admin-event-visibility-copy">
+          <strong>Show event section on homepage</strong>
+          <small>The section is hidden by default. Your event link stays saved when this is turned off.</small>
+        </span>
+        <span className="admin-event-switch">
+          <input name="homepageLumaEventVisible" type="checkbox" role="switch" defaultChecked={settings?.homepageLumaEventVisible ?? false} aria-label="Show event section on homepage" />
+          <span className="admin-event-switch-track" aria-hidden="true" />
+        </span>
+      </label>
       <label className="form-field full">Homepage Luma event link
         <input className="field-input" name="homepageLumaEventUrl" type="url" placeholder="https://luma.com/your-event" defaultValue={settings?.homepageLumaEventUrl || ""} maxLength={500} />
-        <small>Paste the public event link and save. The event will appear above the homepage gallery. Clear the field and save to remove it.</small>
+        <small>Paste the public event link and save. Enable the switch above when you want the embed to appear above the homepage gallery.</small>
       </label>
       <SubmitButton className="btn btn-lime" pendingLabel="Checking Luma…">Save homepage event</SubmitButton>
     </form>

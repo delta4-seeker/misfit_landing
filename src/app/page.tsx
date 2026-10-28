@@ -48,7 +48,7 @@ export default async function HomePage() {
 
       {testimonials.length > 0 && <TestimonialRail testimonials={testimonials} />}
 
-      <section className="luma-event-section section-shell" id="upcoming-event" aria-labelledby="upcoming-event-title">
+      {settings?.homepageLumaEventVisible && <section className="luma-event-section section-shell" id="upcoming-event" aria-labelledby="upcoming-event-title">
         <div className="section-head">
           <h2 id="upcoming-event-title">See you in the room.</h2>
           <a className="text-link" href={lumaCalendarUrl} target="_blank" rel="noopener noreferrer">All events ↗</a>
@@ -62,7 +62,7 @@ export default async function HomePage() {
           <p>Our next gathering is on its way.</p>
           <a className="btn btn-outline" href={lumaCalendarUrl} target="_blank" rel="noopener noreferrer">View the Luma calendar ↗</a>
         </div>}
-      </section>
+      </section>}
 
       {photos.length > 0 && (
         <section className="gallery-preview section-shell">
