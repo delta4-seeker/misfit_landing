@@ -87,8 +87,12 @@ async function main() {
   const contentSecurityPolicy = response.headers.get("content-security-policy");
   checks.push(check(
     "content security policy",
-    Boolean(contentSecurityPolicy?.includes("default-src 'self'") && contentSecurityPolicy.includes("frame-ancestors 'none'")),
-    contentSecurityPolicy ? "default source and frame ancestry restricted" : "missing",
+    Boolean(
+      contentSecurityPolicy?.includes("default-src 'self'")
+      && contentSecurityPolicy.includes("frame-ancestors 'none'")
+      && contentSecurityPolicy.includes("frame-src https://luma.com"),
+    ),
+    contentSecurityPolicy ? "default source and frame ancestry restricted; Luma embeds allowed" : "missing",
   ));
   const strictTransportSecurity = response.headers.get("strict-transport-security");
   checks.push(check(
