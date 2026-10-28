@@ -1,17 +1,17 @@
 import Link from "next/link";
 
 import { GalleryGrid } from "@/components/gallery-grid";
-import { ProductCard } from "@/components/product-card";
+import { ProductRail } from "@/components/product-rail";
 import { TestimonialRail } from "@/components/testimonial-rail";
 import { SubmitButton } from "@/components/submit-button";
 import { subscribeNewsletter } from "@/app/actions";
-import { getFeaturedProducts, getGallery, getTestimonials } from "@/lib/data";
+import { getGallery, getHomepageProducts, getTestimonials } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const [products, photos, testimonials] = await Promise.all([
-    getFeaturedProducts(), getGallery(6), getTestimonials(),
+    getHomepageProducts(), getGallery(6), getTestimonials(),
   ]);
   return (
     <>
@@ -37,12 +37,7 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {products.length > 0 && (
-        <section className="products-section section-shell">
-          <div className="section-head"><h2>Proof that different works.</h2><Link className="btn btn-outline" href="/products">View all products</Link></div>
-          <div className="product-grid">{products.map((product) => <ProductCard product={product} key={product.id} />)}</div>
-        </section>
-      )}
+      {products.length > 0 && <ProductRail products={products} />}
 
       {testimonials.length > 0 && <TestimonialRail testimonials={testimonials} />}
 
