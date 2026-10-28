@@ -71,13 +71,6 @@ export function ProductRail({ products }: { products: ProductSummary[] }) {
     <section
       className="products-section section-shell"
       aria-labelledby="homepage-products-title"
-      onMouseEnter={() => { pausedRef.current = true; }}
-      onMouseLeave={() => { pausedRef.current = false; }}
-      onFocusCapture={() => { focusedRef.current = true; }}
-      onBlurCapture={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) focusedRef.current = false;
-      }}
-      onTouchStart={() => { manualPauseUntilRef.current = performance.now() + 3000; }}
     >
       <div className="section-head product-rail-heading">
         <h2 id="homepage-products-title">Proof that different works.</h2>
@@ -89,9 +82,24 @@ export function ProductRail({ products }: { products: ProductSummary[] }) {
           <Link className="btn btn-outline" href="/products">View all products</Link>
         </div>
       </div>
-      <div className="product-rail" ref={railRef} tabIndex={0} aria-label="Products, scroll horizontally">
+      <div
+        className="product-rail"
+        ref={railRef}
+        tabIndex={0}
+        aria-label="Products, scroll horizontally"
+        onFocusCapture={() => { focusedRef.current = true; }}
+        onBlurCapture={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget)) focusedRef.current = false;
+        }}
+        onTouchStart={() => { manualPauseUntilRef.current = performance.now() + 3000; }}
+      >
         {products.map((product) => (
-          <div className="product-rail-item" key={product.id}>
+          <div
+            className="product-rail-item"
+            key={product.id}
+            onMouseEnter={() => { pausedRef.current = true; }}
+            onMouseLeave={() => { pausedRef.current = false; }}
+          >
             <ProductCard product={product} />
           </div>
         ))}
