@@ -8,11 +8,18 @@ import { prisma } from "@/lib/prisma";
 import type { EventSummary, FounderSummary, GalleryItem, ProductEngagement, ProductSummary, TestimonialSummary } from "@/lib/types";
 import { displayName, founderSlug, profileImage } from "@/lib/utils";
 
-async function fromDatabase<T>(key: string[], tags: string[], query: () => Promise<T>): Promise<T> {
-  return unstable_cache(query, key, { tags, revalidate: 300 })();
+async function fromDatabase<T>(key: string[], tags: string[], query: () => Promise<T>, revalidate = 300): Promise<T> {
+  return unstable_cache(query, key, { tags, revalidate })();
 }
 
 type ProductWithRelations = Awaited<ReturnType<typeof loadProductsFromDatabase>>[number];
+
+const productInclude = {
+  category: true,
+  owner: true,
+  coFounders: { where: { status: "ACTIVE" }, orderBy: { createdAt: "asc" } },
+  _count: { select: { votes: true, comments: true } },
+} satisfies Prisma.ProductInclude;
 
 function liveProductWhere(category?: string): Prisma.ProductWhereInput {
   return {
@@ -22,22 +29,15 @@ function liveProductWhere(category?: string): Prisma.ProductWhereInput {
   };
 }
 
-async function loadProductsFromDatabase(category?: string, featuredOnly = false, pagination?: { skip: number; take: number }) {
+async function loadProductsFromDatabase(category?: string, pagination?: { skip: number; take: number }, ids?: string[]) {
   return prisma.product.findMany({
     where: {
       ...liveProductWhere(category),
-      ...(featuredOnly ? { featured: true, exclusive: true } : {}),
+      ...(ids ? { id: { in: ids } } : {}),
     },
-    include: {
-      category: true,
-      owner: true,
-      coFounders: { where: { status: "ACTIVE" }, orderBy: { createdAt: "asc" } },
-      _count: { select: { votes: true, comments: true } },
-    },
-    orderBy: featuredOnly
-      ? [{ featuredOrder: "asc" }, { createdAt: "desc" }]
-      : [{ createdAt: "desc" }],
-    ...(featuredOnly ? { take: 4 } : pagination || {}),
+    include: productInclude,
+    orderBy: [{ createdAt: "desc" }],
+    ...(pagination || {}),
   });
 }
 
@@ -83,13 +83,31 @@ export async function getProductsPage(category: string | undefined, requestedPag
   return fromDatabase(["products-page", category || "all", String(requestedPage), String(pageSize)], ["products"], async () => {
     const totalCount = await prisma.product.count({ where: liveProductWhere(category) });
     const bounds = pageBounds(totalCount, requestedPage, pageSize);
-    const products = await loadProductsFromDatabase(category, false, { skip: bounds.skip, take: pageSize });
+    const products = await loadProductsFromDatabase(category, { skip: bounds.skip, take: pageSize });
     return { products: products.map(mapProduct), totalCount, page: bounds.page, totalPages: bounds.totalPages };
   });
 }
 
-export async function getFeaturedProducts() {
-  return fromDatabase(["featured-products"], ["products"], async () => (await loadProductsFromDatabase(undefined, true)).map(mapProduct));
+export async function getHomepageProducts() {
+  return fromDatabase(["homepage-products"], ["products"], async () => {
+    const picked = await prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT product.id
+      FROM "Product" AS product
+      INNER JOIN "User" AS owner ON owner.id = product."ownerId"
+      WHERE product.status = ${"LIVE"}::"ListingStatus"
+        AND owner.status = ${"ACTIVE"}::"UserStatus"
+      ORDER BY random()
+      LIMIT 6
+    `;
+    if (!picked.length) return [];
+
+    const products = await loadProductsFromDatabase(undefined, undefined, picked.map(({ id }) => id));
+    const byId = new Map(products.map((product) => [product.id, product]));
+    return picked.flatMap(({ id }) => {
+      const product = byId.get(id);
+      return product ? [mapProduct(product)] : [];
+    });
+  }, 60);
 }
 
 export async function getProduct(slug: string) {
