@@ -79,7 +79,7 @@ export async function getProducts(category?: string) {
   return fromDatabase(["products", category || "all"], ["products"], async () => (await loadProductsFromDatabase(category)).map(mapProduct));
 }
 
-export async function getProductsPage(category: string | undefined, requestedPage: number, pageSize = 6) {
+export async function getProductsPage(category: string | undefined, requestedPage: number, pageSize = 16) {
   return fromDatabase(["products-page", category || "all", String(requestedPage), String(pageSize)], ["products"], async () => {
     const totalCount = await prisma.product.count({ where: liveProductWhere(category) });
     const bounds = pageBounds(totalCount, requestedPage, pageSize);
