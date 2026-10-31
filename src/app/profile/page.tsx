@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
@@ -7,6 +8,7 @@ import { ProfileAvatar } from "@/components/profile-avatar";
 import { SubmitButton } from "@/components/submit-button";
 import { profileCompletion } from "@/lib/profile";
 import { prisma } from "@/lib/prisma";
+import { displayName, founderSlug } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Your profile" };
 export const dynamic = "force-dynamic";
@@ -31,6 +33,7 @@ export default async function ProfilePage({ searchParams }: { searchParams: Prom
   return (
     <section className="profile-form-layout section-shell">
       <h1>{completion.complete ? "Edit your profile." : "Complete your profile."}</h1>
+      {completion.complete && <Link className="text-link" href={`/founders/${founderSlug(displayName(user), user.id)}`}>View your public profile ↗</Link>}
       {error && <p className="form-error" role="alert">{error}</p>}
       {saved && <p className="success-note" role="status">Your profile changes have been saved.</p>}
       <p className="profile-form-note">{completion.complete

@@ -260,7 +260,7 @@ export async function getTestimonials(): Promise<TestimonialSummary[]> {
 }
 
 export async function getFounder(slug: string) {
-  return fromDatabase(["founder", slug], ["products", "founders"], async () => {
+  return fromDatabase(["founder", slug], ["products", "founders", "blogs"], async () => {
     const idSuffix = slug.split("-").at(-1) || "";
     const user = await prisma.user.findFirst({
       where: { id: { endsWith: idSuffix }, status: "ACTIVE" },
@@ -272,6 +272,11 @@ export async function getFounder(slug: string) {
         coFoundedProducts: {
           where: { status: "LIVE" },
           include: { category: true, owner: true, coFounders: { where: { status: "ACTIVE" }, orderBy: { createdAt: "asc" } }, _count: { select: { votes: true, comments: true } } },
+        },
+        blogPosts: {
+          where: { status: "PUBLISHED", publishedAt: { lte: new Date() } },
+          orderBy: [{ publishedAt: "desc" }, { createdAt: "desc" }],
+          include: { _count: { select: { likes: true, comments: true } } },
         },
       },
     });
@@ -289,7 +294,7 @@ export async function getFounder(slug: string) {
     const products = [...user.products, ...user.coFoundedProducts]
       .filter((product, index, all) => all.findIndex((item) => item.id === product.id) === index)
       .map(mapProduct);
-    return { founder, products };
+    return { founder, products, blogs: user.blogPosts };
   });
 }
 

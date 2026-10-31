@@ -12,7 +12,7 @@ import { normalizeLumaUrl, resolveLumaEvent } from "@/lib/luma";
 import { prisma } from "@/lib/prisma";
 import { consumeRateLimit } from "@/lib/rate-limit";
 import { deleteStoredImage, uploadGalleryImages, uploadImage } from "@/lib/storage";
-import { founderSlug, slugify } from "@/lib/utils";
+import { displayName, founderSlug, slugify } from "@/lib/utils";
 import { instagramHandleSchema, secureExternalUrlSchema } from "@/lib/validation";
 import { parseWhatsAppExport } from "@/lib/whatsapp-import";
 
@@ -507,6 +507,136 @@ export async function adminSaveBlog(formData: FormData) {
   revalidatePath(`/blog/${post.slug}`);
   revalidatePath("/admin");
   redirect("/admin?view=blogs&saved=1");
+}
+
+const memberBlogSchema = z.object({
+  title: z.string().trim().min(4).max(160),
+  excerpt: z.string().trim().min(20).max(320),
+  body: z.string().trim().min(100).max(50_000),
+});
+
+function memberBlogEditorHref(id: string, message: string) {
+  const edit = id ? `?edit=${encodeURIComponent(id)}&` : "?";
+  return `/blog/write${edit}error=${encodeURIComponent(message)}`;
+}
+
+export async function saveMemberBlog(formData: FormData) {
+  const actor = await requireActiveMember("/blog/write");
+  const id = String(formData.get("id") || "").trim();
+  if (!await consumeRateLimit("blog-save", actor.id, 20, HOUR)) redirect(memberBlogEditorHref(id, "Too many saves. Please try again later."));
+  const parsed = memberBlogSchema.safeParse({
+    title: formData.get("title"),
+    excerpt: formData.get("excerpt"),
+    body: formData.get("body"),
+  });
+  if (!parsed.success) redirect(memberBlogEditorHref(id, parsed.error.issues[0]?.message || "Check your story."));
+  const existing = id ? await prisma.blogPost.findUnique({ where: { id } }) : null;
+  if (id && (!existing || existing.authorId !== actor.id)) throw new Error("Blog post not found.");
+  const file = formData.get("coverImage");
+  const hasNewCover = file instanceof File && file.size > 0;
+  if (!hasNewCover && !existing?.coverImageUrl) redirect(memberBlogEditorHref(id, "Add a banner image before saving your story."));
+  let coverImageUrl: string | undefined;
+  if (hasNewCover) {
+    try { coverImageUrl = await uploadImage(file, "blogs", 6); }
+    catch (error) { redirect(memberBlogEditorHref(id, error instanceof Error ? error.message : "Banner upload failed.")); }
+  }
+  const status = formData.get("published") === "on" ? "PUBLISHED" as const : "DRAFT" as const;
+  const readingMinutes = Math.max(1, Math.ceil(parsed.data.body.split(/\s+/).length / 220));
+  let slug = existing?.slug;
+  if (!slug) {
+    const base = slugify(parsed.data.title) || "story";
+    slug = base;
+    let suffix = 2;
+    while (await prisma.blogPost.findUnique({ where: { slug }, select: { id: true } })) slug = `${base}-${suffix++}`;
+  }
+  const data = {
+    title: parsed.data.title,
+    slug,
+    kicker: null,
+    excerpt: parsed.data.excerpt,
+    body: parsed.data.body,
+    authorName: displayName(actor),
+    authorId: actor.id,
+    tags: [],
+    status,
+    readingMinutes,
+    ...(coverImageUrl ? { coverImageUrl } : {}),
+    publishedAt: status === "PUBLISHED" ? existing?.publishedAt || new Date() : null,
+  };
+  let post;
+  try {
+    post = existing
+      ? await prisma.blogPost.update({ where: { id: existing.id }, data })
+      : await prisma.blogPost.create({ data });
+  } catch (error) {
+    if (coverImageUrl) await deleteStoredImage(coverImageUrl);
+    throw error;
+  }
+  if (coverImageUrl && existing?.coverImageUrl && existing.coverImageUrl !== coverImageUrl) await deleteStoredImage(existing.coverImageUrl);
+  await audit(actor.id, existing ? "UPDATE_OWN_BLOG" : "CREATE_OWN_BLOG", "BlogPost", post.id, { title: post.title, status: post.status });
+  updateTag("blogs");
+  revalidatePath("/blog");
+  revalidatePath(`/blog/${post.slug}`);
+  revalidatePath(`/founders/${founderSlug(displayName(actor), actor.id)}`);
+  redirect(status === "PUBLISHED" ? `/blog/${post.slug}` : `/blog/write?edit=${encodeURIComponent(post.id)}&saved=1`);
+}
+
+export async function deleteMemberBlog(postId: string) {
+  const actor = await requireActiveMember("/profile");
+  const post = await prisma.blogPost.findUnique({ where: { id: postId }, select: { id: true, slug: true, title: true, authorId: true, coverImageUrl: true } });
+  if (!post || (post.authorId !== actor.id && !actor.isAdmin)) throw new Error("Blog post not found.");
+  await prisma.blogPost.delete({ where: { id: post.id } });
+  await deleteStoredImage(post.coverImageUrl);
+  await audit(actor.id, "DELETE_OWN_BLOG", "BlogPost", post.id, { title: post.title });
+  updateTag("blogs");
+  revalidatePath("/blog");
+  revalidatePath(`/blog/${post.slug}`);
+  revalidatePath("/profile");
+  revalidatePath("/blog/write");
+  revalidatePath(`/founders/${founderSlug(displayName(actor), actor.id)}`);
+}
+
+export async function toggleBlogLike(slug: string) {
+  const actor = await requireActiveMember(`/blog/${slug}`);
+  if (!await consumeRateLimit("blog-like", actor.id, 60, HOUR)) return;
+  const post = await prisma.blogPost.findFirst({ where: { slug, status: "PUBLISHED", publishedAt: { lte: new Date() }, OR: [{ authorId: null }, { author: { status: "ACTIVE" } }] }, select: { id: true, authorId: true } });
+  if (!post) throw new Error("Blog post not found.");
+  const key = { postId_userId: { postId: post.id, userId: actor.id } };
+  const existing = await prisma.blogLike.findUnique({ where: key, select: { userId: true } });
+  if (existing) await prisma.blogLike.delete({ where: key });
+  else await prisma.blogLike.create({ data: { postId: post.id, userId: actor.id } });
+  updateTag("blogs");
+  revalidatePath("/blog");
+  revalidatePath(`/blog/${slug}`);
+  if (post.authorId) revalidatePath("/founders", "layout");
+}
+
+const blogCommentSchema = z.string().trim().min(2, "Write at least 2 characters.").max(1_000, "Keep comments under 1,000 characters.");
+
+export async function createBlogComment(slug: string, formData: FormData) {
+  const actor = await requireActiveMember(`/blog/${slug}#discussion`);
+  const parsed = blogCommentSchema.safeParse(formData.get("body"));
+  if (!parsed.success) redirect(`/blog/${slug}?commentError=${encodeURIComponent(parsed.error.issues[0]?.message || "Check your comment.")}#discussion`);
+  if (!await consumeRateLimit("blog-comment", actor.id, 10, 10 * MINUTE)) redirect(`/blog/${slug}?commentError=Too+many+comments.+Please+try+again+later.#discussion`);
+  const post = await prisma.blogPost.findFirst({ where: { slug, status: "PUBLISHED", publishedAt: { lte: new Date() }, OR: [{ authorId: null }, { author: { status: "ACTIVE" } }] }, select: { id: true } });
+  if (!post) throw new Error("Blog post not found.");
+  await prisma.blogComment.create({ data: { postId: post.id, authorId: actor.id, body: parsed.data } });
+  updateTag("blogs");
+  revalidatePath("/blog");
+  revalidatePath(`/blog/${slug}`);
+  redirect(`/blog/${slug}?commentPosted=1#discussion`);
+}
+
+export async function deleteBlogComment(slug: string, commentId: string) {
+  const actor = await requireActiveMember(`/blog/${slug}#discussion`);
+  const comment = await prisma.blogComment.findUnique({ where: { id: commentId }, select: { authorId: true, post: { select: { slug: true } } } });
+  if (!comment || comment.post.slug !== slug) throw new Error("Comment not found.");
+  if (comment.authorId !== actor.id && !actor.isAdmin) throw new Error("Forbidden");
+  await prisma.blogComment.delete({ where: { id: commentId } });
+  updateTag("blogs");
+  revalidatePath("/blog");
+  revalidatePath(`/blog/${slug}`);
+  redirect(`/blog/${slug}#discussion`);
 }
 
 const testimonialSchema = z.object({

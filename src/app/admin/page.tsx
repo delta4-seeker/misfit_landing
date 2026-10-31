@@ -189,7 +189,10 @@ async function AdminEvents({ search }: { search: AdminSearch }) {
 }
 
 async function AdminBlogs({ search }: { search: AdminSearch }) {
-  const posts = await prisma.blogPost.findMany({ orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }] });
+  const posts = await prisma.blogPost.findMany({
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    include: { _count: { select: { likes: true, comments: true } } },
+  });
   const editing = posts.find((post) => post.id === search.edit);
   return <>
     <AdminTitle title="Blogs." subtitle="Write field notes, save drafts, publish, edit, or remove articles." />
@@ -201,13 +204,13 @@ async function AdminBlogs({ search }: { search: AdminSearch }) {
       <label className="form-field">Kicker (optional)<input className="field-input" name="kicker" defaultValue={editing?.kicker || ""} maxLength={80} placeholder="Field notes · 01" /></label>
       <label className="form-field">Author name<input className="field-input" name="authorName" defaultValue={editing?.authorName || ""} required minLength={2} maxLength={100} /></label>
       <label className="form-field full">Excerpt<textarea className="field-input" name="excerpt" defaultValue={editing?.excerpt || ""} required minLength={20} maxLength={320} rows={3} /></label>
-      <CroppableImageInput name="coverImage" label="Cover image" kind="gallery" existingUrl={editing?.coverImageUrl || undefined} allowReplacement saveCropSeparately={false} compact="cover" />
+      <CroppableImageInput name="coverImage" label="Cover image" kind="gallery" fixedAspect="landscape" existingUrl={editing?.coverImageUrl || undefined} allowReplacement saveCropSeparately={false} compact="cover" />
       <label className="form-field full">Article body<textarea className="field-input blog-admin-body" name="body" defaultValue={editing?.body || ""} required minLength={100} maxLength={50000} rows={16} /><small>Separate paragraphs with a blank line. Use ## for headings, &gt; for quotes, and - for list items.</small></label>
       <label className="blog-publish-field"><input name="published" type="checkbox" defaultChecked={editing?.status === "PUBLISHED"} /> Publish on the public blog</label>
       <div className="blog-admin-actions"><SubmitButton className="btn btn-lime" pendingLabel="Saving article…">{editing ? "Save article" : "Create article"}</SubmitButton>{editing && <Link className="btn btn-outline" href="/admin?view=blogs">Cancel edit</Link>}</div>
     </form>
     <div className="admin-list">{posts.length ? posts.map((post) => <article className="admin-row blog-admin-row" key={post.id}>
-      <div><strong>{post.title}</strong><small>{post.authorName} · {post.status === "PUBLISHED" ? "Published" : "Draft"} · Updated {formatAdminDate(post.updatedAt)}</small><p>{post.excerpt}</p></div>
+      <div><strong>{post.title}</strong><small>{post.authorName} · {post.status === "PUBLISHED" ? "Published" : "Draft"} · {post._count.likes} likes · {post._count.comments} comments · Updated {formatAdminDate(post.updatedAt)}</small><p>{post.excerpt}</p></div>
       {post.status === "PUBLISHED" && <Link className="text-button" href={`/blog/${post.slug}`} target="_blank">View ↗</Link>}
       <Link className="text-button" href={`/admin?view=blogs&edit=${encodeURIComponent(post.id)}`}>Edit</Link>
       <form action={adminDelete.bind(null, "blog", post.id)}><ConfirmSubmitButton className="text-button danger-button" message={`Delete ${post.title}? This cannot be undone.`}>Delete</ConfirmSubmitButton></form>
