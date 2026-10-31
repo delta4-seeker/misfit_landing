@@ -1,12 +1,13 @@
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import type { User as DatabaseUser } from "@prisma/client";
+import { cookies } from "next/headers";
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
 import { profileCompletion } from "@/lib/profile";
 import { prisma } from "@/lib/prisma";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth = NextAuth({
   adapter: PrismaAdapter(prisma),
   secret: process.env.AUTH_SECRET || process.env.SECRET_KEY,
   trustHost: true,
@@ -67,3 +68,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+export const { handlers, signIn, signOut } = nextAuth;
+
+const sessionCookieNames = ["authjs.session-token", "__Secure-authjs.session-token"];
+
+export async function auth() {
+  const session = await nextAuth.auth();
+  if (session?.user) return session;
+
+  // Auth.js returns a logged-out response when a transient database-session
+  // lookup fails. If the browser still has a session cookie, retry once rather
+  // than bouncing an authenticated member through /join.
+  const cookieStore = await cookies();
+  if (!sessionCookieNames.some((name) => cookieStore.has(name))) return session;
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  return nextAuth.auth();
+}

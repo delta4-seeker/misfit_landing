@@ -5,14 +5,21 @@ import { ProductRail } from "@/components/product-rail";
 import { TestimonialRail } from "@/components/testimonial-rail";
 import { SubmitButton } from "@/components/submit-button";
 import { subscribeNewsletter } from "@/app/actions";
+import { auth } from "@/auth";
 import { getGallery, getHomepageProducts, getSiteSettings, getTestimonials } from "@/lib/data";
 import { DEFAULT_LUMA_CALENDAR_URL } from "@/lib/luma";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [products, photos, testimonials, settings] = await Promise.all([
+  const session = await auth();
+  const [products, photos, testimonials, settings, listedProduct] = await Promise.all([
     getHomepageProducts(), getGallery(6), getTestimonials(), getSiteSettings(),
+    session?.user.id ? prisma.product.findFirst({
+      where: { OR: [{ ownerId: session.user.id }, { coFounders: { some: { id: session.user.id } } }] },
+      select: { id: true },
+    }) : null,
   ]);
   const lumaEventId = settings?.homepageLumaEventId;
   const lumaEventUrl = settings?.homepageLumaEventUrl;
@@ -27,7 +34,7 @@ export default async function HomePage() {
           <h1>Built by misfits.</h1>
           <p>A high-trust club for founders who choose the harder path, build from Nepal, and think beyond every border.</p>
           <div className="button-row">
-            <Link className="btn btn-outline" href="/products/new">List your product</Link>
+            <Link className="btn btn-outline" href={listedProduct ? "/products" : "/products/new"}>{listedProduct ? "Browse products" : "List your product"}</Link>
           </div>
         </div>
       </section>
